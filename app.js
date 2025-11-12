@@ -178,14 +178,32 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs, {
   }
 }));
 
-// Importar rutas
-const usuarioRoutes = require("./routes/usuarioRouts");
-
-// Montar rutas
-app.use("/", usuarioRoutes);
-
 // Importar modelos en ORDEN CORRECTO (modelos base primero)
-const Usuario = require("./models/usuario.js");
+const { Usuario } = require("./models/usuario.js");
+const { Cliente } = require("./models/cliente.js");
+const { Paciente } = require("./models/paciente.js");
+const { Comerciable } = require("./models/comerciable.js");
+const { Tarea } = require("./models/tarea.js");
+
+// Modelos que dependen de los básicos
+const { Entrada } = require("./models/entrada.js");
+const { HistorialPeso } = require("./models/historial_peso.js");
+const { Consulta } = require("./models/consulta.js");
+const { Producto } = require("./models/producto.js");
+const { Servicio } = require("./models/servicio.js");
+const { Medicamento } = require("./models/medicamento.js");
+const { HistorialTarea } = require("./models/historial_tarea.js");
+const { ServicioComplejo } = require("./models/servicio_complejo.js");
+const { Calendario } = require("./models/calendario.js");
+
+// Modelos con dependencias más complejas
+const { FotoConsulta } = require("./models/foto_consulta.js");
+const { Venta } = require("./models/venta.js");
+const { FotoServicioComplejo } = require("./models/foto_servicio_complejo.js");
+
+// Modelos de unión
+const { VentaUsuario } = require("./models/venta_usuario.js");
+
 
 // Verificación de modelos cargados (DEBUG)
 console.log("Modelos registrados en Sequelize:", Object.keys(sequelize.models));
@@ -195,18 +213,33 @@ function setupRelations() {
   try {
     // Asegurarnos de que todos los modelos estén disponibles
     const models = {
-      Usuario,
-    };
-    
-    // 1. Modelos sin dependencias externas
+  Usuario,
+  Cliente,
+  Paciente,
+  Comerciable,
+  Tarea,
+  Entrada,
+  HistorialPeso,
+  Consulta,
+  Producto,
+  Servicio,
+  Medicamento,
+  HistorialTarea,
+  ServicioComplejo,
+  FotoConsulta,
+  Venta,
+  FotoServicioComplejo,
+  VentaUsuario,
+  Calendario, // se pone al final porque depende de ServicioComplejo
+};
 
-    // 2. Modelos que solo dependen de los básicos
-    Usuario.associate(models);
     
-    // 3. Modelos con dependencias más complejas
-    
-    // 4. Modelos de unión/intermediarios
-
+    // Iterar sobre los modelos y llamar a associate si existe
+    for (const modelName of Object.keys(models)) {
+      if (models[modelName] && models[modelName].associate) {
+        models[modelName].associate(models);
+      }
+    }
     
   } catch (error) {
     console.error("❌ Error al establecer relaciones:", error);
@@ -220,8 +253,26 @@ const startApp = async () => {
     // Establecer relaciones antes de sincronizar
     setupRelations();
 
-    // Sincronizar modelos con la base de datos
-    await sequelize.sync({ alter: true }); // O { force: true } si quieres recrear las tablas en cada inicio
+    // Sincronizar modelos con la base de datos en orden de dependencia
+    await Usuario.sync();
+    await Cliente.sync();
+    await Paciente.sync();
+    await Comerciable.sync();
+    await Tarea.sync();
+    await HistorialPeso.sync();
+    await Consulta.sync();
+    await Producto.sync();
+    await Entrada.sync();
+    await Servicio.sync();
+    await Medicamento.sync();
+    await HistorialTarea.sync();
+    await ServicioComplejo.sync();
+    await Calendario.sync();
+    await Venta.sync();
+    await FotoServicioComplejo.sync();
+    await FotoConsulta.sync();
+    await VentaUsuario.sync();
+
     console.log("✅ Tablas sincronizadas correctamente");
 
     const PORT = process.env.PORT || 4000;

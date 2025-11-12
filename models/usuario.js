@@ -1,13 +1,15 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../helpers/database.js");
 
+const roles = ["Administrador", "Médico", "Recepcionista", "Estilista"];
+
 const Usuario = sequelize.define("usuario", {
   id_usuario: {
     type: DataTypes.INTEGER,
     autoIncrement: true,
     primaryKey: true,
   },
-  nombre: {
+  nombre_natural: {
     type: DataTypes.STRING,
     allowNull: false,
   },
@@ -16,32 +18,23 @@ const Usuario = sequelize.define("usuario", {
     allowNull: false,
     unique: true,
   },
-  carnet_identidad: {
-    type: DataTypes.STRING,
-    // Allow null temporarily to match DB state while we backfill existing rows.
-    allowNull: false,
-    unique: true,
-    validate: {
-      isNumeric: {
-        msg: 'El carnet_identidad solo debe contener dígitos (0-9)'
-      },
-      len: {
-        args: [11, 11],
-        msg: 'El carnet_identidad debe tener exactamente 11 dígitos'
-      }
-    }
-  },
-  cargo: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
   contrasenna: {
     type: DataTypes.STRING,
+    allowNull: false,
+  },
+  salario_diario: {
+    type: DataTypes.DOUBLE,
     allowNull: false,
   },
   rol: {
     type: DataTypes.STRING,
     allowNull: false,
+    validate: {
+      isIn: {
+        args: [roles],
+        msg: "El rol especificado no es válido",
+      },
+    },
   },
   activo: {
     type: DataTypes.BOOLEAN,
@@ -53,17 +46,10 @@ const Usuario = sequelize.define("usuario", {
 });
 
 Usuario.associate = function(models) {
-  Usuario.hasMany(models.Oferta, {
-    foreignKey: 'id_usuario',
-  });
-  Usuario.hasMany(models.Factura, {
-    foreignKey: 'id_usuario',
-    as: 'facturas'
-  });
-  Usuario.hasMany(models.Salida, {
-    foreignKey: 'id_usuario',
-    as: 'salidas'
-  });
+    Usuario.hasMany(models.Entrada, { foreignKey: 'id_usuario' });
+    Usuario.belongsToMany(models.Venta, { through: models.VentaUsuario, foreignKey: 'id_usuario' });
+    Usuario.hasMany(models.Tarea, { foreignKey: 'id_usuario' });
+    Usuario.hasMany(models.Calendario, { foreignKey: 'id_usuario' });
 };
 
-module.exports = Usuario;
+module.exports = { Usuario, roles };
