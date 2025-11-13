@@ -1,7 +1,8 @@
 /* global process */
 const usuarioService = require('../services/usuarioService');
 const bcrypt = require('bcrypt');
-const { roles } = require("../models/usuario")
+const { roles, Usuario } = require("../models/usuario");
+const jwt = require("jsonwebtoken");
 
 const getAllUsuarios = async (req, res) => {
     try {
@@ -248,11 +249,120 @@ const filterUsuarios = async (req, res) => {
     }
 };
 
-module.exports = {
-    getAllUsuarios,
-    getUsuarioById,
-    createUsuario,
-    updateUsuario,
-    deleteUsuario,
-    filterUsuarios
+const login = async (req, res) => {
+    const { nombre_usuario, contrasenna } = req.body;
+
+    try {
+        const usuario = await usuarioService.getUsuarioByNombreUsuario(nombre_usuario);
+        if (!usuario) {
+            return res.status(404).json({ errors: ["No se ha encontrado el usuario con el nombre de usuario pasado por parámetros."] });
+        }
+
+        const isValidPassword = await bcrypt.compare(contrasenna, usuario.contrasenna);
+        if (!isValidPassword) {
+            return res.status(401).json({ errors: ["Contraseña incorrecta"] });
+        }
+
+        const token = jwt.sign(
+            {
+                userId: usuario.id_usuario,
+                nombre: usuario.nombre_natural,
+                nombre_usuario: usuario.nombre_usuario,
+                rol: usuario.rol
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '3h' }
+        );
+
+        const refreshToken = jwt.sign({ userId: usuario.id_usuario }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '24h' });
+
+        const respuesta = {
+            usuario: {
+                id_usuario: usuario.id_usuario,
+                nombre: usuario.nombre_natural,
+                nombre_usuario: usuario.nombre_usuario,
+                rol: usuario.rol
+            },
+            token: token,
+            refreshToken
+        };
+
+        return res.status(200).json(respuesta);
+    } catch (error) {
+        console.error("Error al iniciar sesión:", error);
+        const status = error.status || 500;
+        const errs = error.errors && Array.isArray(error.errors) ? error.errors : [error.message || 'Error al iniciar sesión'];
+        return res.status(status).json({ errors: errs });
+    }
 };
+
+const changePassword = async (req, res) => {
+    try {
+        const { viejaContrasenna, nuevaContrasenna } = req.body || {};
+        const errors = [];
+        if (!viejaContrasenna) errors.push('viejaContrasenna es requerida');
+        if (!nuevaContrasenna) errors.push('nuevaContrasenna es requerida');
+        if (errors.length > 0) return res.status(400).json({ errors });
+
+        // Obtener y verificar token del header Authorization
+        const authHeader = req.headers.authorization;
+        if (!authHeader) return res.status(403).json({ errors: ['Token no proporcionado'] });
+        const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : authHeader;
+        let decoded;
+        try {
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (errorVerify) {
+            console.error('Error al verificar el token:', errorVerify);
+            return res.status(403).json({ errors: ['Token inválido o expirado'] });
+        }
+
+        // En login se firma como userId; aceptar también id_usuario por compatibilidad
+        const userId = decoded.userId || decoded.id_usuario;
+        if (!userId) return res.status(403).json({ errors: ['Token sin userId válido'] });
+
+        // Buscar usuario con su contraseña (hash)
+        const usuario = await Usuario.findOne({ where: { id_usuario: userId } });
+        if (!usuario) return res.status(404).json({ errors: ['Usuario no encontrado'] });
+
+        // Validar contraseña actual con bcrypt de forma estricta
+        const storedHash = String(usuario.contrasenna || '');
+        const oldPlain = String(viejaContrasenna || '');
+        // Validar formato de hash bcrypt ($2a/$2b/$2y)
+        const isBcryptHash = /^\$2[aby]?\$\d{2}\$[./A-Za-z0-9]{53}$/.test(storedHash);
+        if (!isBcryptHash) {
+            return res.status(500).json({ errors: ['Contraseña almacenada con formato inválido'] });
+        }
+        const ok = await bcrypt.compare(oldPlain, storedHash);
+        if (ok !== true) {
+            return res.status(401).json({ errors: ['Contraseña actual incorrecta'] });
+        }
+
+        // Solo si la contraseña actual es correcta, proceder a actualizar
+        if (ok === true) {
+            // Reglas mínimas para nueva contraseña (opcional: reflejar validaciones de create)
+            if (String(nuevaContrasenna).length < 6) {
+                return res.status(400).json({ errors: ['La nueva contraseña debe tener al menos 6 caracteres'] });
+            }
+
+            const hashed = await bcrypt.hash(String(nuevaContrasenna), 10);
+            await usuario.update({ contrasenna: hashed });
+            return res.status(200).json({ message: 'Contraseña actualizada correctamente' });
+        }
+    } catch (error) {
+        console.error('Error en changePassword:', error);
+        const status = error.status || 500;
+        const errs = error.errors && Array.isArray(error.errors) ? error.errors : [error.message || 'Error al cambiar contraseña'];
+        return res.status(status).json({ errors: errs });
+    }
+}
+
+    module.exports = {
+        getAllUsuarios,
+        getUsuarioById,
+        createUsuario,
+        updateUsuario,
+        deleteUsuario,
+        filterUsuarios,
+        login,
+        changePassword
+    };

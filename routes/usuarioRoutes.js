@@ -438,4 +438,91 @@ router.delete('/usuario/DeleteUsuario/:id',authenticate(), usuarioController.del
  */
 router.post('/usuario/filter/:limit/:page',authenticate(), usuarioController.filterUsuarios);
 
+/**
+ * @swagger
+ * /Usuario/changePassword:
+ *   post:
+ *     tags: [Usuarios]
+ *     summary: Cambiar contraseña del usuario autenticado
+ *     description: Requiere token Bearer. Valida la contraseña actual y la actualiza por la nueva.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [viejaContrasenna, nuevaContrasenna]
+ *             properties:
+ *               viejaContrasenna:
+ *                 type: string
+ *                 description: Contraseña actual
+ *               nuevaContrasenna:
+ *                 type: string
+ *                 description: Contraseña nueva
+ *           example:
+ *             viejaContrasenna: "MiClaveActual123"
+ *             nuevaContrasenna: "MiClaveNueva456"
+ *     responses:
+ *       200:
+ *         description: Contraseña actualizada correctamente
+ *       400:
+ *         description: Error de validación
+ *       401:
+ *         description: Contraseña actual incorrecta
+ *       403:
+ *         description: Token inválido o faltante
+ *       404:
+ *         description: Usuario no encontrado
+ *       500:
+ *         description: Error del servidor
+ */
+router.post("/Usuario/changePassword", authenticate(), usuarioController.changePassword);
+
+/**
+ * @swagger
+ * /usuario/login:
+ *   post:
+ *     summary: Iniciar sesión de usuario
+ *     tags: [Usuarios]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - nombre_usuario
+ *               - contrasenna
+ *             properties:
+ *               nombre_usuario:
+ *                 type: string
+ *                 description: Nombre de usuario
+ *               contrasenna:
+ *                 type: string
+ *                 description: Contraseña del usuario
+ *     responses:
+ *       200:
+ *         description: Inicio de sesión exitoso, devuelve el usuario y los tokens
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 usuario:
+ *                   $ref: '#/components/schemas/Usuario'
+ *                 token:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *       401:
+ *         description: Contraseña incorrecta
+ *       404:
+ *         description: Usuario no encontrado
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.post('/usuario/login', usuarioController.login);
+
 module.exports = router;
