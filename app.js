@@ -251,11 +251,28 @@ function setupRelations() {
 }
 
 // Configurar rutas
+const monedaRoutes = require('./routes/monedaRoutes');
+const comerciableRoutes = require('./routes/comerciableRoutes');
 app.use('/', usuarioRoutes);
+app.use('/', monedaRoutes);
+app.use('/', comerciableRoutes);
+
+const fs = require('fs');
+const path = require('path');
 
 // Iniciar servidor y sincronizar BD
 const startApp = async () => {
   try {
+    // Crear directorio y archivo para cambio de moneda
+    const monedaDir = path.join(__dirname, 'cambio_moneda');
+    if (!fs.existsSync(monedaDir)) {
+      fs.mkdirSync(monedaDir);
+    }
+    const monedaFile = path.join(monedaDir, 'moneda.txt');
+    if (!fs.existsSync(monedaFile)) {
+      fs.writeFileSync(monedaFile, '');
+    }
+
     // Establecer relaciones antes de sincronizar
     setupRelations();
 
