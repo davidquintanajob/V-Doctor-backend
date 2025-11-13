@@ -139,6 +139,15 @@ const filterProductos = async (req, res) => {
     }
 };
 
+const getUniqueProductoCode = async (req, res) => {
+    try {
+        const code = await productoService.getUniqueCode();
+        res.status(200).json({ code });
+    } catch (error) {
+        res.status(error.status || 500).json({ error: error.message, details: error.errors });
+    }
+};
+
 module.exports = {
     getAllProductos,
     getProductoById,
@@ -146,4 +155,5 @@ module.exports = {
     updateProducto,
     deleteProducto,
     filterProductos,
+    getUniqueProductoCode,
 };

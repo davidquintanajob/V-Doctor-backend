@@ -24,6 +24,23 @@ const authenticate = require("../helpers/authenticate");
  *       500:
  *         description: Error interno del servidor
  */
+
+/**
+ * @swagger
+ * /producto/unique-code:
+ *   get:
+ *     summary: Obtener un código de producto único
+ *     tags: [Productos]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Código único generado
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.get('/producto/unique-code', authenticate(), productoController.getUniqueProductoCode);
+
 router.get('/producto', authenticate(), productoController.getAllProductos);
 
 /**

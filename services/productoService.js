@@ -44,7 +44,7 @@ const getAllProductos = async () => {
   }
 };
 
-const getProductoById = async (id) => {
+const getProductoById = async (id, transaction) => {
   const producto = await Producto.findOne({
     where: { id_comerciable: id },
     include: [
@@ -62,13 +62,14 @@ const getProductoById = async (id) => {
         model: Entrada,
         required: false,
       }
-    ]
+    ],
+    transaction
   });
   return producto;
 };
 
-const createProducto = async (productoData) => {
-  const t = await sequelize.transaction();
+const createProducto = async (productoData, transaction) => {
+  const t = transaction || await sequelize.transaction();
   try {
     if (await productoExistsByCodigo(productoData.codigo)) {
       throw new Error(`Ya existe un producto con el código: ${productoData.codigo}`);
@@ -87,12 +88,17 @@ const createProducto = async (productoData) => {
     
     const producto = await Producto.create(newProductoData, { transaction: t });
 
-    await t.commit();
+    if (!transaction) {
+      await t.commit();
+      return await getProductoById(producto.id_comerciable);
+    }
 
-    return await getProductoById(producto.id_comerciable);
+    return await getProductoById(producto.id_comerciable, t);
 
   } catch (error) {
-    await t.rollback();
+    if (!transaction) {
+      await t.rollback();
+    }
     console.log("Error al en el servicio de crear producto: ", error);
     if (!error.errors || !Array.isArray(error.errors)) {
       const err = new Error(error.message || 'Error interno al crear producto');
@@ -104,12 +110,14 @@ const createProducto = async (productoData) => {
   }
 };
 
-const updateProducto = async (id, productoData) => {
-  const t = await sequelize.transaction();
+const updateProducto = async (id, productoData, transaction) => {
+  const t = transaction || await sequelize.transaction();
   try {
     const producto = await Producto.findOne({ where: { id_comerciable: id }, transaction: t });
     if (!producto) {
-      await t.rollback();
+      if (!transaction) {
+        await t.rollback();
+      }
       return null;
     }
 
@@ -128,10 +136,14 @@ const updateProducto = async (id, productoData) => {
       }
     }
 
-    await t.commit();
+    if (!transaction) {
+      await t.commit();
+    }
     return await getProductoById(id);
   } catch (error) {
-    await t.rollback();
+    if (!transaction) {
+      await t.rollback();
+    }
     console.log("Error en el servicio de actualizar producto: ", error);
     if (!error.errors || !Array.isArray(error.errors)) {
       const err = new Error(error.message || 'Error interno al actualizar producto');
@@ -143,8 +155,8 @@ const updateProducto = async (id, productoData) => {
   }
 };
 
-const deleteProducto = async (id) => {
-  const t = await sequelize.transaction();
+const deleteProducto = async (id, transaction) => {
+  const t = transaction || await sequelize.transaction();
   try {
     const venta = await Venta.findOne({ where: { id_comerciable: id }, transaction: t });
     if (venta) {
@@ -158,7 +170,9 @@ const deleteProducto = async (id) => {
 
     const producto = await Producto.findOne({ where: { id_comerciable: id }, transaction: t });
     if (!producto) {
-      await t.rollback();
+      if (!transaction) {
+        await t.rollback();
+      }
       return false;
     }
 
@@ -169,10 +183,14 @@ const deleteProducto = async (id) => {
       await comerciable.destroy({ transaction: t });
     }
 
-    await t.commit();
+    if (!transaction) {
+      await t.commit();
+    }
     return true;
   } catch (error) {
-    await t.rollback();
+    if (!transaction) {
+      await t.rollback();
+    }
     console.error("Error en el servicio de eliminar producto:", error);
     if (!error.errors || !Array.isArray(error.errors)) {
       const err = new Error(error.message || 'Error interno al eliminar producto');
@@ -199,7 +217,7 @@ const filterProductosPaginated = async (filterCriteria, limit, offset) => {
             whereClauseProducto.categoria = { [Op.iLike]: `%${filterCriteria[key]}%` };
             break;
           case 'codigo':
-            whereClauseProducto.codigo = { [Op.iLike]: `%${filterCriteria[key]}%` };
+            whereClauseProducto.codigo = { [Op.eq]: filterCriteria[key] };
             break;
           case 'costo_usd_min':
             whereClauseProducto.costo_usd = { ...whereClauseProducto.costo_usd, [Op.gte]: filterCriteria[key] };
@@ -280,6 +298,16 @@ const filterProductosPaginated = async (filterCriteria, limit, offset) => {
   }
 };
 
+const getUniqueCode = async () => {
+  let code;
+  let isUnique = false;
+  while (!isUnique) {
+    code = Math.floor(10000 + Math.random() * 90000).toString();
+    isUnique = !(await productoExistsByCodigo(code));
+  }
+  return code;
+};
+
 module.exports = {
   getAllProductos,
   getProductoById,
@@ -288,4 +316,5 @@ module.exports = {
   deleteProducto,
   filterProductosPaginated,
   productoExistsByCodigo,
+  getUniqueCode,
 };
