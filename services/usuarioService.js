@@ -1,13 +1,10 @@
 // services/usuarioService.js
 
-const  Usuario  = require("../models/usuario");
-const Oferta = require("../models/oferta");
-const Factura = require("../models/factura");
-const Servicio = require("../models/servicio");
-const Producto = require("../models/producto");
-const Contrato = require("../models/contrato");
-const TipoContrato = require("../models/tipo_contrato");
-const { calcularSumaGeneral } = require("./facturaService");
+const { Usuario } = require("../models/usuario");
+const { Venta } = require("../models/venta");
+const { Entrada } = require("../models/entrada");
+const { Tarea } = require("../models/tarea");
+const { Calendario } = require("../models/calendario");
 const { Op } = require('sequelize');
 
 // Helper: agrega totalFactura (servicios + productos + cargoAdicional)
@@ -31,22 +28,25 @@ const getAllUsuarios = async () => {
     const usuarios = await Usuario.findAll({
       include: [
         {
-          model: Oferta,
+          model: Venta,
+          required: false,
+          through: { attributes: [] } // Excluir atributos de la tabla intermedia
+        },
+        {
+          model: Entrada,
           required: false
         },
         {
-          model: Factura,
-          as: 'facturas',
-          required: false,
-          include: [
-            { model: Servicio, as: 'servicio' },
-            { model: Producto, as: 'productos', through: { attributes: ['cantidad', 'precioVenta', 'costoVenta'] } },
-            { model: Contrato, as: 'contrato', include: [{ model: TipoContrato, as: 'tipoContrato' }] },
-          ]
+          model: Tarea,
+          required: false
+        },
+        {
+          model: Calendario,
+          required: false
         }
       ]
     });
-    return usuarios.map(mapUsuarioWithFacturaTotals);
+    return usuarios;
   } catch (error) {
     console.log("Error en los servicios de getAllUsuarios: ", error);
     if (!error.errors || !Array.isArray(error.errors)) {
@@ -67,22 +67,25 @@ const getUsuarioById = async (id) => {
     where: { id_usuario: id },
     include: [
       {
-        model: Oferta,
+        model: Venta,
+        required: false,
+        through: { attributes: [] }
+      },
+      {
+        model: Entrada,
         required: false
       },
       {
-        model: Factura,
-        as: 'facturas',
-        required: false,
-        include: [
-          { model: Servicio, as: 'servicio' },
-          { model: Producto, as: 'productos', through: { attributes: ['cantidad', 'precioVenta', 'costoVenta'] } },
-          { model: Contrato, as: 'contrato', include: [{ model: TipoContrato, as: 'tipoContrato' }] },
-        ]
+        model: Tarea,
+        required: false
+      },
+      {
+        model: Calendario,
+        required: false
       }
     ]
   });
-  return usuario ? mapUsuarioWithFacturaTotals(usuario) : null;
+  return usuario;
 };
 
 const usuarioExists = async (nombre_usuario) => {
@@ -143,14 +146,41 @@ const updateUsuario = async (id, userData) => {
 const deleteUsuario = async (id) => {
   try {
     const usuario = await Usuario.findOne({
-      where: { id_usuario: id }
+      where: { id_usuario: id },
+      include: [
+        { model: Entrada, limit: 1 },
+        { model: Venta, limit: 1, through: { attributes: [] } },
+        { model: Tarea, limit: 1 },
+        { model: Calendario, limit: 1 }
+      ]
     });
-    
-    if (usuario) {
-      await usuario.destroy();
-      return true;
+
+    if (!usuario) {
+      return false; // Usuario no encontrado
     }
-    return false;
+
+    const associations = [];
+    if (usuario.entradas && usuario.entradas.length > 0) {
+      associations.push('entradas');
+    }
+    if (usuario.venta && usuario.venta.length > 0) {
+      associations.push('ventas');
+    }
+    if (usuario.tareas && usuario.tareas.length > 0) {
+      associations.push('tareas');
+    }
+    if (usuario.calendarios && usuario.calendarios.length > 0) {
+      associations.push('calendarios');
+    }
+
+    if (associations.length > 0) {
+      const error = new Error(`No se puede eliminar el usuario porque está asociado con ${associations.join(', ')}.`);
+      error.status = 400;
+      throw error;
+    }
+
+    await usuario.destroy();
+    return true;
   } catch (error) {
     console.error("Error en el servicio de eliminar usuario:", error);
     if (!error.errors || !Array.isArray(error.errors)) {
@@ -179,9 +209,9 @@ const getUsuarioByNombreUsuario = async (nombre_usuario) => {
 };
 
 /**
- * Filtrar usuarios por múltiples criterios
+ * Filtrar usuarios por múltiples criterios con paginación
  */
-const filterUsuarios = async (filterCriteria) => {
+const filterUsuariosPaginated = async (filterCriteria, limit, offset) => {
   try {
     const whereClause = {};
     for (const key in filterCriteria) {
@@ -190,26 +220,31 @@ const filterUsuarios = async (filterCriteria) => {
       }
     }
 
-    const usuarios = await Usuario.findAll({
+    const result = await Usuario.findAndCountAll({
       where: whereClause,
+      limit,
+      offset,
       include: [
         {
-          model: Oferta,
+          model: Venta,
+          required: false,
+          through: { attributes: [] }
+        },
+        {
+          model: Entrada,
           required: false
         },
         {
-          model: Factura,
-          as: 'facturas',
-          required: false,
-          include: [
-            { model: Servicio, as: 'servicio' },
-            { model: Producto, as: 'productos', through: { attributes: ['cantidad', 'precioVenta', 'costoVenta'] } },
-            { model: Contrato, as: 'contrato', include: [{ model: TipoContrato, as: 'tipoContrato' }] },
-          ]
+          model: Tarea,
+          required: false
+        },
+        {
+          model: Calendario,
+          required: false
         }
       ]
     });
-    return usuarios.map(mapUsuarioWithFacturaTotals);
+    return result;
   } catch (error) {
     console.error("Error en el servicio de filtrar usuarios:", error);
     if (!error.errors || !Array.isArray(error.errors)) {
@@ -231,6 +266,6 @@ module.exports = {
   deleteUsuario,
   usuarioExists,
   getUsuarioByNombreUsuario,
-  filterUsuarios,
+  filterUsuariosPaginated,
   usuarioExistsByCarnet,
 };

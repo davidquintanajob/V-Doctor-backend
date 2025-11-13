@@ -208,6 +208,9 @@ const { VentaUsuario } = require("./models/venta_usuario.js");
 // Verificación de modelos cargados (DEBUG)
 console.log("Modelos registrados en Sequelize:", Object.keys(sequelize.models));
 
+// Importar rutas
+const usuarioRoutes = require('./routes/usuarioRoutes');
+
 // Configurar relaciones después de cargar todos los modelos
 function setupRelations() {
   try {
@@ -233,19 +236,22 @@ function setupRelations() {
   Calendario, // se pone al final porque depende de ServicioComplejo
 };
 
-    
+
     // Iterar sobre los modelos y llamar a associate si existe
     for (const modelName of Object.keys(models)) {
       if (models[modelName] && models[modelName].associate) {
         models[modelName].associate(models);
       }
     }
-    
+
   } catch (error) {
     console.error("❌ Error al establecer relaciones:", error);
     throw error;
   }
 }
+
+// Configurar rutas
+app.use('/', usuarioRoutes);
 
 // Iniciar servidor y sincronizar BD
 const startApp = async () => {

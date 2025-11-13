@@ -25,6 +25,7 @@ const Usuario = sequelize.define("usuario", {
   salario_diario: {
     type: DataTypes.DOUBLE,
     allowNull: false,
+    defaultValue: 0.00,
   },
   rol: {
     type: DataTypes.STRING,
