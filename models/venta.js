@@ -86,6 +86,14 @@ const Venta = sequelize.define("venta", {
       key: 'id_comerciable'      // target column
     }
   },
+  id_comerciable: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'comerciables',
+      key: 'id_comerciable'
+    }
+  },
 }, {
   timestamps: true,
 });
@@ -95,6 +103,7 @@ Venta.associate = function (models) {
   Venta.belongsToMany(models.Usuario, { through: models.VentaUsuario, foreignKey: 'id_venta' });
   Venta.belongsTo(models.Consulta, { foreignKey: 'id_consulta' });
   Venta.belongsTo(models.ServicioComplejo, { foreignKey: 'id_servicio_complejo', targetKey: 'id_comerciable' });
+  Venta.belongsTo(models.Comerciable, { foreignKey: 'id_comerciable' });
 };
 
 module.exports = { Venta, formasDePago };

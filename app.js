@@ -253,9 +253,11 @@ function setupRelations() {
 // Configurar rutas
 const monedaRoutes = require('./routes/monedaRoutes');
 const comerciableRoutes = require('./routes/comerciableRoutes');
+const productoRoutes = require('./routes/productoRoutes');
 app.use('/', usuarioRoutes);
 app.use('/', monedaRoutes);
 app.use('/', comerciableRoutes);
+app.use('/', productoRoutes);
 
 const fs = require('fs');
 const path = require('path');
@@ -284,14 +286,14 @@ const startApp = async () => {
     await Tarea.sync();
     await HistorialPeso.sync();
     await Consulta.sync();
-    await Producto.sync();
+    await Producto.sync({ alter: true });
     await Entrada.sync();
     await Servicio.sync();
     await Medicamento.sync();
     await HistorialTarea.sync();
     await ServicioComplejo.sync();
     await Calendario.sync();
-    await Venta.sync();
+    await Venta.sync({ alter: true });
     await FotoServicioComplejo.sync();
     await FotoConsulta.sync();
     await VentaUsuario.sync();

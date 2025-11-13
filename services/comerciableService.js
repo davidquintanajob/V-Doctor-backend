@@ -1,12 +1,62 @@
 const { Comerciable } = require("../models/comerciable");
+const { Producto } = require("../models/producto");
+const { Servicio } = require("../models/servicio");
+const { Medicamento } = require("../models/medicamento");
+const { ServicioComplejo } = require("../models/servicio_complejo");
 const { Op } = require('sequelize');
 
 const getAllComerciables = async () => {
-    return await Comerciable.findAll();
+    return await Comerciable.findAll({
+        include: [
+            {
+                model: Producto,
+                required: false,
+                include: [
+                    {
+                        model: Medicamento,
+                        required: false
+                    }
+                ]
+            },
+            {
+                model: Servicio,
+                required: false,
+                include: [
+                    {
+                        model: ServicioComplejo,
+                        required: false
+                    }
+                ]
+            }
+        ]
+    });
 };
 
 const getComerciableById = async (id) => {
-    return await Comerciable.findByPk(id);
+    return await Comerciable.findByPk(id, {
+        include: [
+            {
+                model: Producto,
+                required: false,
+                include: [
+                    {
+                        model: Medicamento,
+                        required: false
+                    }
+                ]
+            },
+            {
+                model: Servicio,
+                required: false,
+                include: [
+                    {
+                        model: ServicioComplejo,
+                        required: false
+                    }
+                ]
+            }
+        ]
+    });
 };
 
 const filterComerciablesPaginated = async (filterCriteria, limit, offset) => {
@@ -31,7 +81,29 @@ const filterComerciablesPaginated = async (filterCriteria, limit, offset) => {
     return await Comerciable.findAndCountAll({
         where: whereClause,
         limit,
-        offset
+        offset,
+        include: [
+            {
+                model: Producto,
+                required: false,
+                include: [
+                    {
+                        model: Medicamento,
+                        required: false
+                    }
+                ]
+            },
+            {
+                model: Servicio,
+                required: false,
+                include: [
+                    {
+                        model: ServicioComplejo,
+                        required: false
+                    }
+                ]
+            }
+        ]
     });
 };
 

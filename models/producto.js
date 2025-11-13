@@ -10,6 +10,10 @@ const Producto = sequelize.define("producto", {
       key: 'id_comerciable'
     }
   },
+  nombre: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
   costo_usd: {
     type: DataTypes.DOUBLE,
     allowNull: false,
@@ -40,6 +44,7 @@ const Producto = sequelize.define("producto", {
   cantidad: {
     type: DataTypes.DOUBLE,
     allowNull: false,
+    defaultValue: 0.0,
   },
 }, {
   timestamps: true,
@@ -48,6 +53,7 @@ const Producto = sequelize.define("producto", {
 Producto.associate = function (models) {
   Producto.belongsTo(models.Comerciable, { foreignKey: 'id_comerciable' });
   Producto.hasMany(models.Entrada, { foreignKey: 'id_comerciable' });
+  Producto.hasOne(models.Medicamento, { foreignKey: 'id_comerciable' });
 };
 
 module.exports = { Producto };
