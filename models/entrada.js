@@ -58,8 +58,8 @@ const Entrada = sequelize.define("entrada", {
 });
 
 Entrada.associate = function(models) {
-    Entrada.belongsTo(models.Usuario, { foreignKey: 'id_usuario' });
-    Entrada.belongsTo(models.Producto, { foreignKey: 'id_comerciable' });
+    Entrada.belongsTo(models.Usuario, { foreignKey: 'id_usuario', as: 'usuario' });
+    Entrada.belongsTo(models.Producto, { foreignKey: 'id_comerciable', as: 'producto' });
 };
 
 module.exports = { Entrada };

@@ -28,6 +28,7 @@ const getAllProductos = async () => {
         {
           model: Entrada,
           required: false,
+          as: "entradas"
         }
       ]
     });
@@ -61,6 +62,7 @@ const getProductoById = async (id, transaction) => {
       {
         model: Entrada,
         required: false,
+        as: "entradas"
       }
     ],
     transaction
@@ -272,6 +274,7 @@ const filterProductosPaginated = async (filterCriteria, limit, offset) => {
         {
           model: Entrada,
           required: false,
+          as: "entradas"
         },
         {
           model: Medicamento,

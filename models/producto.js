@@ -52,7 +52,7 @@ const Producto = sequelize.define("producto", {
 
 Producto.associate = function (models) {
   Producto.belongsTo(models.Comerciable, { foreignKey: 'id_comerciable' });
-  Producto.hasMany(models.Entrada, { foreignKey: 'id_comerciable' });
+  Producto.hasMany(models.Entrada, { foreignKey: 'id_comerciable', as: 'entradas' });
   Producto.hasOne(models.Medicamento, { foreignKey: 'id_comerciable' });
 };
 

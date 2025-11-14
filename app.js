@@ -255,11 +255,13 @@ const monedaRoutes = require('./routes/monedaRoutes');
 const comerciableRoutes = require('./routes/comerciableRoutes');
 const productoRoutes = require('./routes/productoRoutes');
 const medicamentoRoutes = require('./routes/medicamentoRoutes');
+const entradaRoutes = require('./routes/entradaRoutes');
 app.use('/', usuarioRoutes);
 app.use('/', monedaRoutes);
 app.use('/', comerciableRoutes);
 app.use('/', productoRoutes);
 app.use('/', medicamentoRoutes);
+app.use('/', entradaRoutes);
 
 const fs = require('fs');
 const path = require('path');
