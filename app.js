@@ -257,6 +257,7 @@ const productoRoutes = require('./routes/productoRoutes');
 const medicamentoRoutes = require('./routes/medicamentoRoutes');
 const entradaRoutes = require('./routes/entradaRoutes');
 const servicioRoutes = require('./routes/servicioRoutes');
+const servicioComplejoRoutes = require('./routes/servicioComplejoRoutes');
 app.use('/', usuarioRoutes);
 app.use('/', monedaRoutes);
 app.use('/', comerciableRoutes);
@@ -264,6 +265,7 @@ app.use('/', productoRoutes);
 app.use('/', medicamentoRoutes);
 app.use('/', entradaRoutes);
 app.use('/', servicioRoutes);
+app.use('/', servicioComplejoRoutes);
 
 const fs = require('fs');
 const path = require('path');
@@ -281,6 +283,20 @@ const startApp = async () => {
       fs.writeFileSync(monedaFile, '');
     }
 
+    // Crear carpetas para fotos si no existen
+    const fotosDir = path.join(__dirname, 'fotos');
+    if (!fs.existsSync(fotosDir)) {
+      fs.mkdirSync(fotosDir);
+    }
+
+    const subcarpetas = ['servicio_complejo', 'paciente', 'consulta'];
+    subcarpetas.forEach(subcarpeta => {
+      const subcarpetaDir = path.join(fotosDir, subcarpeta);
+      if (!fs.existsSync(subcarpetaDir)) {
+        fs.mkdirSync(subcarpetaDir);
+      }
+    });
+    
     // Establecer relaciones antes de sincronizar
     setupRelations();
 

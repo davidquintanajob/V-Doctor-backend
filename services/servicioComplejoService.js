@@ -1,0 +1,376 @@
+const { ServicioComplejo, TIPOS_SERVICIO } = require("../models/servicio_complejo");
+const { Servicio } = require("../models/servicio");
+const { Comerciable } = require("../models/comerciable");
+const { Venta } = require("../models/venta");
+const { FotoServicioComplejo } = require("../models/foto_servicio_complejo");
+const { Calendario } = require("../models/calendario");
+const sequelize = require("../helpers/database");
+const { Op } = require('sequelize');
+const servicioService = require('./servicioService');
+const fs = require('fs').promises;
+const path = require('path');
+
+const getServicioComplejoById = async (id, transaction) => {
+    return await ServicioComplejo.findOne({
+        where: { id_comerciable: id },
+        include: [
+            {
+                model: Servicio,
+                as: 'servicio',
+                required: true,
+                include: [
+                    {
+                        model: Comerciable,
+                        as: 'comerciable',
+                        required: true,
+                    }
+                ]
+            },
+            {
+                model: Venta,
+                required: false,
+            },
+            {
+                model: FotoServicioComplejo,
+                required: false,
+            },
+            {
+                model: Calendario,
+                required: false,
+            }
+        ],
+        transaction
+    });
+};
+
+const createServicioComplejo = async (servicioComplejoData) => {
+    const t = await sequelize.transaction();
+    try {
+        const { calendario, foto_servicio_complejo, ...servicioData } = servicioComplejoData;
+
+        if (!TIPOS_SERVICIO.includes(servicioData.tipo_servicio)) {
+            const error = new Error(`El tipo de servicio '${servicioData.tipo_servicio}' no es válido.`);
+            error.status = 400;
+            throw error;
+        }
+
+        if (calendario) {
+            const { fecha, descripcion, id_usuario } = calendario;
+            if (!fecha || !descripcion || !id_usuario) {
+                const error = new Error('Los campos fecha, descripcion y id_usuario son obligatorios para el calendario.');
+                error.status = 400;
+                throw error;
+            }
+        }
+
+        const servicio = await servicioService.createServicio(servicioData, t);
+
+        const newServicioComplejoData = {
+            id_comerciable: servicio.id_comerciable,
+            tipo_servicio: servicioData.tipo_servicio,
+        };
+
+        const servicioComplejo = await ServicioComplejo.create(newServicioComplejoData, { transaction: t });
+
+        if (calendario) {
+            await Calendario.create({
+                ...calendario,
+                id_comerciable_servicio_complejo: servicio.id_comerciable,
+            }, { transaction: t });
+        }
+
+        if (foto_servicio_complejo && foto_servicio_complejo.length > 0) {
+            const FOTOS_CARPETA_SERVICIO_COMPLEJO = process.env.FOTOS_CARPETA_SERVICIO_COMPLEJO || "/fotos/servicio_complejo/";
+            for (const foto of foto_servicio_complejo) {
+                const newFoto = await FotoServicioComplejo.create({
+                    nota: foto.nota,
+                    ruta: '',
+                    id_comerciable_servicio_complejo: servicioComplejo.id_comerciable,
+                }, { transaction: t });
+
+                const imagePath = path.join(FOTOS_CARPETA_SERVICIO_COMPLEJO, `${servicioComplejo.id_comerciable}-${newFoto.id_foto_servicio_complejo}`);
+                await fs.writeFile(path.join(__dirname, '..', imagePath), foto.ruta, 'base64');
+                await newFoto.update({ ruta: imagePath }, { transaction: t });
+            }
+        }
+
+        await t.commit();
+        return await getServicioComplejoById(servicioComplejo.id_comerciable);
+    } catch (error) {
+        await t.rollback();
+        console.log("Error en el servicio de crear servicio complejo: ", error);
+        if (!error.errors || !Array.isArray(error.errors)) {
+            const err = new Error(error.message || 'Error interno al crear servicio complejo');
+            err.errors = [error.message || 'Error interno al crear servicio complejo'];
+            err.status = error.status || 500;
+            throw err;
+        }
+        throw error;
+    }
+};
+
+const updateServicioComplejo = async (id, servicioComplejoData) => {
+    const t = await sequelize.transaction();
+    try {
+        const { calendario, foto_servicio_complejo, ...servicioData } = servicioComplejoData;
+
+        const servicioComplejo = await ServicioComplejo.findOne({ where: { id_comerciable: id }, transaction: t });
+        if (!servicioComplejo) {
+            await t.rollback();
+            const error = new Error(`Servicio complejo con ID ${id} no encontrado`);
+            error.status = 404;
+            throw error;
+        }
+
+        if (servicioData.tipo_servicio && !TIPOS_SERVICIO.includes(servicioData.tipo_servicio)) {
+            const error = new Error(`El tipo de servicio '${servicioData.tipo_servicio}' no es válido.`);
+            error.status = 400;
+            throw error;
+        }
+
+        if (calendario) {
+            const { fecha, descripcion, id_usuario } = calendario;
+            if (!fecha || !descripcion || !id_usuario) {
+                const error = new Error('Los campos fecha, descripcion y id_usuario son obligatorios para el calendario.');
+                error.status = 400;
+                throw error;
+            }
+        }
+
+        await servicioService.updateServicio(id, servicioData, t);
+        await servicioComplejo.update(servicioData, { transaction: t });
+
+        if (calendario) {
+            await Calendario.destroy({ where: { id_comerciable_servicio_complejo: id }, transaction: t });
+            await Calendario.create({
+                ...calendario,
+                id_comerciable_servicio_complejo: id,
+            }, { transaction: t });
+        }
+
+        if (foto_servicio_complejo) {
+            const FOTOS_CARPETA_SERVICIO_COMPLEJO = process.env.FOTOS_CARPETA_SERVICIO_COMPLEJO || "/fotos/servicio_complejo/";
+            const existingFotos = await FotoServicioComplejo.findAll({ where: { id_comerciable_servicio_complejo: id }, transaction: t });
+            const existingFotoIds = existingFotos.map(f => f.id_foto_servicio_complejo);
+            const incomingFotoIds = foto_servicio_complejo.map(f => f.id_foto_servicio_complejo).filter(id => id);
+
+            const fotosToDelete = existingFotos.filter(f => !incomingFotoIds.includes(f.id_foto_servicio_complejo));
+            for (const foto of fotosToDelete) {
+                await fs.unlink(path.join(__dirname, '..', foto.ruta));
+                await foto.destroy({ transaction: t });
+            }
+
+            for (const fotoData of foto_servicio_complejo) {
+                if (fotoData.id_foto_servicio_complejo) {
+                    const foto = await FotoServicioComplejo.findByPk(fotoData.id_foto_servicio_complejo, { transaction: t });
+                    if (foto) {
+                        await foto.update({ nota: fotoData.nota }, { transaction: t });
+                        if (fotoData.ruta) {
+                            const imagePath = path.join(FOTOS_CARPETA_SERVICIO_COMPLEJO, `${id}-${foto.id_foto_servicio_complejo}`);
+                            await fs.writeFile(path.join(__dirname, '..', imagePath), fotoData.ruta, 'base64');
+                            await foto.update({ ruta: imagePath }, { transaction: t });
+                        }
+                    }
+                } else {
+                    const newFoto = await FotoServicioComplejo.create({
+                        nota: fotoData.nota,
+                        ruta: '',
+                        id_comerciable_servicio_complejo: id,
+                    }, { transaction: t });
+                    const imagePath = path.join(FOTOS_CARPETA_SERVICIO_COMPLEJO, `${id}-${newFoto.id_foto_servicio_complejo}`);
+                    await fs.writeFile(path.join(__dirname, '..', imagePath), fotoData.ruta, 'base64');
+                    await newFoto.update({ ruta: imagePath }, { transaction: t });
+                }
+            }
+        }
+
+        await t.commit();
+        return await getServicioComplejoById(id);
+    } catch (error) {
+        await t.rollback();
+        console.log("Error en el servicio de actualizar servicio complejo: ", error);
+        if (!error.errors || !Array.isArray(error.errors)) {
+            const err = new Error(error.message || 'Error interno al actualizar servicio complejo');
+            err.errors = [error.message || 'Error interno al actualizar servicio complejo'];
+            err.status = error.status || 500;
+            throw err;
+        }
+        throw error;
+    }
+};
+
+const deleteServicioComplejo = async (id) => {
+    const t = await sequelize.transaction();
+    try {
+        const servicioComplejo = await ServicioComplejo.findOne({ where: { id_comerciable: id }, transaction: t });
+        if (!servicioComplejo) {
+            await t.rollback();
+            const error = new Error(`Servicio complejo con ID ${id} no encontrado`);
+            error.status = 404;
+            throw error;
+        }
+
+        const fotos = await FotoServicioComplejo.findAll({ where: { id_comerciable_servicio_complejo: id }, transaction: t });
+        for (const foto of fotos) {
+            if (foto.ruta) {
+                try {
+                    await fs.unlink(path.join(__dirname, '..', foto.ruta));
+                } catch (err) {
+                    console.error(`Failed to delete file: ${foto.ruta}`, err);
+                }
+            }
+        }
+
+        await FotoServicioComplejo.destroy({ where: { id_comerciable_servicio_complejo: id }, transaction: t });
+        await Calendario.destroy({ where: { id_comerciable_servicio_complejo: id }, transaction: t });
+        await servicioComplejo.destroy({ transaction: t });
+        await servicioService.deleteServicio(id, t);
+
+        await t.commit();
+        return true;
+    } catch (error) {
+        await t.rollback();
+        console.error("Error en el servicio de eliminar servicio complejo:", error);
+        if (!error.errors || !Array.isArray(error.errors)) {
+            const err = new Error(error.message || 'Error interno al eliminar servicio complejo');
+            err.errors = [error.message || 'Error interno al eliminar servicio complejo'];
+            err.status = error.status || 500;
+            throw err;
+        }
+        throw error;
+    }
+};
+
+const filterServiciosComplejosPaginated = async (filterCriteria, limit, offset) => {
+    try {
+        const whereClauseServicioComplejo = {};
+        const whereClauseServicio = {};
+        const whereClauseComerciable = {};
+
+        for (const key in filterCriteria) {
+            if (Object.prototype.hasOwnProperty.call(filterCriteria, key)) {
+                switch (key) {
+                    case 'tipo_servicio':
+                        whereClauseServicioComplejo[Op.and] = [
+                            sequelize.where(
+                                sequelize.cast(sequelize.col('tipo_servicio'), 'varchar'),
+                                { [Op.iLike]: `%${filterCriteria[key]}%` }
+                            )
+                        ];
+                        break;
+                    case 'descripcion':
+                        whereClauseServicio.descripcion = { [Op.iLike]: `%${filterCriteria[key]}%` };
+                        break;
+                    case 'precio_usd_min':
+                        whereClauseComerciable.precio_usd = { ...whereClauseComerciable.precio_usd, [Op.gte]: filterCriteria[key] };
+                        break;
+                    case 'precio_usd_max':
+                        whereClauseComerciable.precio_usd = { ...whereClauseComerciable.precio_usd, [Op.lte]: filterCriteria[key] };
+                        break;
+                    case 'precio_cup_min':
+                        whereClauseComerciable.precio_cup = { ...whereClauseComerciable.precio_cup, [Op.gte]: filterCriteria[key] };
+                        break;
+                    case 'precio_cup_max':
+                        whereClauseComerciable.precio_cup = { ...whereClauseComerciable.precio_cup, [Op.lte]: filterCriteria[key] };
+                        break;
+                }
+            }
+        }
+
+        const { count, rows } = await ServicioComplejo.findAndCountAll({
+            where: whereClauseServicioComplejo,
+            limit,
+            offset,
+            include: [
+                {
+                    model: Servicio,
+                    as: 'servicio',
+                    where: whereClauseServicio,
+                    required: true,
+                    include: [
+                        {
+                            model: Comerciable,
+                            as: 'comerciable',
+                            where: whereClauseComerciable,
+                            required: true,
+                        }
+                    ]
+                },
+                {
+                    model: Venta,
+                    required: false,
+                },
+                {
+                    model: FotoServicioComplejo,
+                    required: false,
+                },
+                {
+                    model: Calendario,
+                    required: false,
+                }
+            ]
+        });
+
+        return { count, rows };
+    } catch (error) {
+        console.error("Error en el servicio de filtrar servicio complejo:", error);
+        if (!error.errors || !Array.isArray(error.errors)) {
+            const err = new Error(error.message || 'Error interno al filtrar servicios complejos');
+            err.errors = [error.message || 'Error interno al filtrar servicios complejos'];
+            err.status = error.status || 500;
+            throw err;
+        }
+        throw error;
+    }
+};
+
+const getAllServiciosComplejos = async () => {
+    try {
+        return await ServicioComplejo.findAll({
+            include: [
+                {
+                    model: Servicio,
+                    as: 'servicio',
+                    required: true,
+                    include: [
+                        {
+                            model: Comerciable,
+                            as: 'comerciable',
+                            required: true,
+                        }
+                    ]
+                },
+                {
+                    model: Venta,
+                    required: false,
+                },
+                {
+                    model: FotoServicioComplejo,
+                    required: false,
+                },
+                {
+                    model: Calendario,
+                    required: false,
+                }
+            ]
+        });
+    } catch (error) {
+        console.error("Error en el servicio de obtener todos los servicios complejos:", error);
+        if (!error.errors || !Array.isArray(error.errors)) {
+            const err = new Error(error.message || 'Error interno al obtener todos los servicios complejos');
+            err.errors = [error.message || 'Error interno al obtener todos los servicios complejos'];
+            err.status = error.status || 500;
+            throw err;
+        }
+        throw error;
+    }
+};
+
+module.exports = {
+    getServicioComplejoById,
+    createServicioComplejo,
+    updateServicioComplejo,
+    deleteServicioComplejo,
+    filterServiciosComplejosPaginated,
+    getAllServiciosComplejos,
+};
