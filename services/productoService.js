@@ -13,7 +13,7 @@ const productoExistsByCodigo = async (codigo) => {
 
 const getAllProductos = async () => {
   try {
-    const productos = await Producto.findAll({
+    const result = await Producto.findAll({
       include: [
         {
           model: Comerciable,
@@ -26,12 +26,19 @@ const getAllProductos = async () => {
           ]
         },
         {
+          model: Medicamento,
+          required: false,
+        },
+        {
           model: Entrada,
           required: false,
           as: "entradas"
         }
       ]
     });
+    
+    productos = result.filter(producto => !producto.medicamento);
+
     return productos;
   } catch (error) {
     console.log("Error en los servicios de getAllProductos: ", error);

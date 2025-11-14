@@ -19,8 +19,8 @@ const Servicio = sequelize.define("servicio", {
 });
 
 Servicio.associate = function (models) {
-    Servicio.belongsTo(models.Comerciable, { foreignKey: 'id_comerciable' });
-    Servicio.hasOne(models.ServicioComplejo, { foreignKey: 'id_comerciable' });
+    Servicio.belongsTo(models.Comerciable, { foreignKey: 'id_comerciable', as: "comerciable" });
+    Servicio.hasOne(models.ServicioComplejo, { foreignKey: 'id_comerciable', as: "servicio_complejo" });
 };
 
 module.exports = { Servicio };

@@ -256,12 +256,14 @@ const comerciableRoutes = require('./routes/comerciableRoutes');
 const productoRoutes = require('./routes/productoRoutes');
 const medicamentoRoutes = require('./routes/medicamentoRoutes');
 const entradaRoutes = require('./routes/entradaRoutes');
+const servicioRoutes = require('./routes/servicioRoutes');
 app.use('/', usuarioRoutes);
 app.use('/', monedaRoutes);
 app.use('/', comerciableRoutes);
 app.use('/', productoRoutes);
 app.use('/', medicamentoRoutes);
 app.use('/', entradaRoutes);
+app.use('/', servicioRoutes);
 
 const fs = require('fs');
 const path = require('path');
