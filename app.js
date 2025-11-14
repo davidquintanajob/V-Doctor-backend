@@ -258,6 +258,7 @@ const medicamentoRoutes = require('./routes/medicamentoRoutes');
 const entradaRoutes = require('./routes/entradaRoutes');
 const servicioRoutes = require('./routes/servicioRoutes');
 const servicioComplejoRoutes = require('./routes/servicioComplejoRoutes');
+const fotoServicioComplejoRoutes = require('./routes/fotoServicioComplejoRoutes');
 app.use('/', usuarioRoutes);
 app.use('/', monedaRoutes);
 app.use('/', comerciableRoutes);
@@ -266,6 +267,7 @@ app.use('/', medicamentoRoutes);
 app.use('/', entradaRoutes);
 app.use('/', servicioRoutes);
 app.use('/', servicioComplejoRoutes);
+app.use('/', fotoServicioComplejoRoutes);
 
 const fs = require('fs');
 const path = require('path');
