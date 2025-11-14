@@ -286,8 +286,10 @@ const servicioRoutes = require('./routes/servicioRoutes');
 const servicioComplejoRoutes = require('./routes/servicioComplejoRoutes');
 const fotoServicioComplejoRoutes = require('./routes/fotoServicioComplejoRoutes');
 const clientePacienteRoutes = require('./routes/clientePacienteRoutes');
+const pacienteRoutes = require('./routes/pacienteRoutes');
 app.use('/', usuarioRoutes);
 app.use('/', clienteRoutes);
+app.use('/', pacienteRoutes);
 app.use('/', clientePacienteRoutes);
 app.use('/', monedaRoutes);
 app.use('/', comerciableRoutes);
@@ -335,7 +337,7 @@ const startApp = async () => {
     await Usuario.sync();
     // Asegurar que la columna `direccion` se cree/actualice en la tabla existente
     await Cliente.sync({ alter: true });
-    await Paciente.sync();
+    await Paciente.sync({ alter: true });
     await Comerciable.sync();
     await Tarea.sync();
     await HistorialPeso.sync();
