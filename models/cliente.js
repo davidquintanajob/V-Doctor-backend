@@ -25,6 +25,10 @@ const Cliente = sequelize.define("cliente", {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  direccion: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
 }, {
   timestamps: true,
 });

@@ -157,7 +157,31 @@ const swaggerOptions = {
           bearerFormat: "JWT",
         },
       },
-      schemas: {},
+      schemas: {
+        Cliente: {
+          type: 'object',
+          properties: {
+            id_cliente: { type: 'integer' },
+            nombre: { type: 'string' },
+            telefono: { type: 'string' },
+            color: { type: 'string' },
+            direccion: { type: 'string' }
+          }
+        },
+        Paciente: {
+          type: 'object',
+          properties: {
+            id_paciente: { type: 'integer' },
+            nombre: { type: 'string' },
+            sexo: { type: 'string' },
+            raza: { type: 'string' },
+            especie: { type: 'string' },
+            numero_clinico: { type: 'integer' },
+            fecha_nacimiento: { type: 'string', format: 'date' },
+            foto_ruta: { type: 'string' }
+          }
+        }
+      },
     },
     security: [{
       bearerAuth: []
@@ -203,6 +227,7 @@ const { FotoServicioComplejo } = require("./models/foto_servicio_complejo.js");
 
 // Modelos de unión
 const { VentaUsuario } = require("./models/venta_usuario.js");
+const { ClientePaciente } = require("./models/cliente_paciente.js");
 
 
 // Verificación de modelos cargados (DEBUG)
@@ -210,6 +235,7 @@ console.log("Modelos registrados en Sequelize:", Object.keys(sequelize.models));
 
 // Importar rutas
 const usuarioRoutes = require('./routes/usuarioRoutes');
+const clienteRoutes = require('./routes/clienteRoutes');
 
 // Configurar relaciones después de cargar todos los modelos
 function setupRelations() {
@@ -260,6 +286,7 @@ const servicioRoutes = require('./routes/servicioRoutes');
 const servicioComplejoRoutes = require('./routes/servicioComplejoRoutes');
 const fotoServicioComplejoRoutes = require('./routes/fotoServicioComplejoRoutes');
 app.use('/', usuarioRoutes);
+app.use('/', clienteRoutes);
 app.use('/', monedaRoutes);
 app.use('/', comerciableRoutes);
 app.use('/', productoRoutes);
@@ -304,7 +331,8 @@ const startApp = async () => {
 
     // Sincronizar modelos con la base de datos en orden de dependencia
     await Usuario.sync();
-    await Cliente.sync();
+    // Asegurar que la columna `direccion` se cree/actualice en la tabla existente
+    await Cliente.sync({ alter: true });
     await Paciente.sync();
     await Comerciable.sync();
     await Tarea.sync();
@@ -316,6 +344,7 @@ const startApp = async () => {
     await Medicamento.sync();
     await HistorialTarea.sync();
     await ServicioComplejo.sync();
+    await ClientePaciente.sync();
     await Calendario.sync();
     await Venta.sync({ alter: true });
     await FotoServicioComplejo.sync();
