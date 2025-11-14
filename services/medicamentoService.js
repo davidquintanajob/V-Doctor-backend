@@ -97,7 +97,9 @@ const updateMedicamento = async (id, medicamentoData) => {
         const producto = await productoService.updateProducto(id, medicamentoData, t);
         if (!producto) {
             await t.rollback();
-            return null;
+            const error = new Error(`Medicamento con ID ${id} no encontrado`);
+            error.status = 404;
+            throw error;
         }
 
         const medicamento = await Medicamento.findOne({ where: { id_comerciable: id }, transaction: t });

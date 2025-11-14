@@ -77,7 +77,9 @@ const updateEntrada = async (id, entradaData) => {
         const entrada = await Entrada.findOne({ where: { id_entrada: id }, transaction: t });
         if (!entrada) {
             await t.rollback();
-            return null;
+            const error = new Error(`Entrada con ID ${id} no encontrado`);
+            error.status = 404;
+            throw error;
         }
 
         const producto = await productoService.getProductoById(entrada.id_comerciable, t);

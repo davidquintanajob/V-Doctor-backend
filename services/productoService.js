@@ -120,7 +120,9 @@ const updateProducto = async (id, productoData, transaction) => {
       if (!transaction) {
         await t.rollback();
       }
-      return null;
+      const error = new Error(`Producto con ID ${id} no encontrado`);
+      error.status = 404;
+      throw error;
     }
 
     if (productoData.codigo && productoData.codigo !== producto.codigo) {
