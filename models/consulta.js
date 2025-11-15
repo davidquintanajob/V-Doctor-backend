@@ -39,12 +39,21 @@ const Consulta = sequelize.define("consulta", {
       key: 'id_paciente'
     }
   },
+  id_usuario: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'usuarios',
+      key: 'id_usuario'
+    }
+  },
 }, {
   timestamps: true,
 });
 
 Consulta.associate = function (models) {
   Consulta.belongsTo(models.Paciente, { foreignKey: 'id_paciente' });
+  Consulta.belongsTo(models.Usuario, { foreignKey: 'id_usuario' });
   Consulta.hasMany(models.Venta, { foreignKey: 'id_consulta' });
   Consulta.hasMany(models.FotoConsulta, { foreignKey: 'id_consulta' });
 };
