@@ -285,6 +285,7 @@ const entradaRoutes = require('./routes/entradaRoutes');
 const servicioRoutes = require('./routes/servicioRoutes');
 const servicioComplejoRoutes = require('./routes/servicioComplejoRoutes');
 const fotoServicioComplejoRoutes = require('./routes/fotoServicioComplejoRoutes');
+const fotoConsultaRoutes = require('./routes/fotoConsultaRoutes');
 const clientePacienteRoutes = require('./routes/clientePacienteRoutes');
 const pacienteRoutes = require('./routes/pacienteRoutes');
 const consultaRoutes = require('./routes/consultaRoutes');
@@ -301,6 +302,7 @@ app.use('/', entradaRoutes);
 app.use('/', servicioRoutes);
 app.use('/', servicioComplejoRoutes);
 app.use('/', fotoServicioComplejoRoutes);
+app.use('/', fotoConsultaRoutes);
 
 const fs = require('fs');
 const path = require('path');
