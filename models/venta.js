@@ -1,7 +1,7 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../helpers/database.js");
 
-const formasDePago = ["Efectivo", "Transferencia"];
+const formasDePago = ["Efectivo", "Transferencia", "Pago en linea"];
 
 const Venta = sequelize.define("venta", {
   id_venta: {

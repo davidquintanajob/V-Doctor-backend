@@ -41,11 +41,11 @@ const authenticate = require('../helpers/authenticate');
  *                     type: string
  *                   tratamiento:
  *                     type: string
- *               patologia:
- *                 type: string
+ *                   patologia:
+ *                     type: string
  *                   id_paciente:
  *                     type: integer
-x *                   id_usuario:
+ *                   id_usuario:
  *                     type: integer
  *                   paciente:
  *                     type: object

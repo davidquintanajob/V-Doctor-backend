@@ -16,18 +16,21 @@ const getEntradaById = async (req, res) => {
 const createEntrada = async (req, res) => {
     const { fecha, cantidad, costo_cup, costo_usd, id_usuario, id_comerciable } = req.body;
     const errors = [];
-    
+
     if (!fecha) errors.push("La fecha es requerida");
     if (!cantidad) errors.push("La cantidad es requerida");
-    if (!costo_cup) errors.push("El costo en cup es requerido");
-    if (!costo_usd) errors.push("El costo en usd es requerido");
+    if (costo_cup === null || costo_cup === undefined)
+        errors.push("El costo en cup es requerido");
+
+    if (costo_usd === null || costo_usd === undefined)
+        errors.push("El costo en usd es requerido");
     if (!id_comerciable) errors.push("El producto o medicmaneto es requerido");
     if (!id_usuario) errors.push("El usuario es requerido");
 
     if (errors.length > 0) {
         return res.status(400).json({ errors });
     }
-    
+
     try {
         const newEntrada = await entradaService.createEntrada(req.body);
         res.status(201).json(newEntrada);
@@ -76,12 +79,12 @@ const filterEntradas = async (req, res) => {
 
         const offset = (pageNum - 1) * limitNum;
 
-        const { 
-            rows: entradas, 
-            count: total, 
-            totalCantidad, 
-            totalCostoCup, 
-            totalCostoUsd 
+        const {
+            rows: entradas,
+            count: total,
+            totalCantidad,
+            totalCostoCup,
+            totalCostoUsd
         } = await entradaService.filterEntradasPaginated(filterCriteria, limitNum, offset);
 
         const totalPages = Math.ceil(total / limitNum);
