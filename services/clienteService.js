@@ -125,9 +125,9 @@ const filterClientesPaginated = async (filterCriteria, limit, offset) => {
       { model: Venta, required: false }
     ];
 
-    // special filter by patient name
-    if (filterCriteria && filterCriteria.nombre_mascota) {
-      include[0].where = { nombre: { [Op.iLike]: `%${filterCriteria.nombre_mascota}%` } };
+    // special filter by patient name (ignore empty strings)
+    if (filterCriteria && filterCriteria.nombre_mascota && String(filterCriteria.nombre_mascota).trim() !== '') {
+      include[0].where = { nombre: { [Op.iLike]: `%${String(filterCriteria.nombre_mascota).trim()}%` } };
       // remove this key so it doesn't interfere with cliente where clause
       delete filterCriteria.nombre_mascota;
     }
@@ -145,9 +145,10 @@ const filterClientesPaginated = async (filterCriteria, limit, offset) => {
 
     for (const key in filterCriteria) {
       if (Object.prototype.hasOwnProperty.call(filterCriteria, key)) {
-        // Skip empty keys
-        if (filterCriteria[key] === undefined || filterCriteria[key] === null) continue;
-        whereClause[key] = { [Op.iLike]: `%${String(filterCriteria[key]).toLowerCase()}%` };
+        // Skip empty keys (undefined, null, or empty strings)
+        const val = filterCriteria[key];
+        if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) continue;
+        whereClause[key] = { [Op.iLike]: `%${String(val).trim()}%` };
       }
     }
 
@@ -190,19 +191,51 @@ const createClienteWithPatients = async (clienteData, pacientesList) => {
       if (p.numero_clinico) delete p.numero_clinico;
 
       const pacientePayload = Object.assign({}, p);
+      // Normalize empty strings to null so Sequelize nullable fields accept them
+      for (const key in pacientePayload) {
+        if (Object.prototype.hasOwnProperty.call(pacientePayload, key)) {
+          const val = pacientePayload[key];
+          if (typeof val === 'string' && val.trim() === '') {
+            pacientePayload[key] = null;
+          }
+        }
+      }
+
       lastNumero += 1;
       pacientePayload.numero_clinico = lastNumero;
 
+      // imagen may be provided as base64; extract and remove the field from payload
       const imagenBase64 = pacientePayload.imagen; // optional
-      if (imagenBase64) delete pacientePayload.imagen;
+      if ('imagen' in pacientePayload) delete pacientePayload.imagen;
 
       const newPaciente = await Paciente.create(pacientePayload, { transaction: t });
 
-      // si viene imagen, guardarla y actualizar foto_ruta
+      // En tu servicio, modifica el guardado de imágenes
       if (imagenBase64) {
-        const imagePath = path.join(FOTOS_CARPETA_PACIENTE, `${newPaciente.id_paciente}`);
+        // Detectar el tipo de imagen desde el base64
+        const imageType = detectImageType(imagenBase64);
+        const extension = imageType || 'jpg'; // default jpg
+
+        const imagePath = path.join(FOTOS_CARPETA_PACIENTE, `${newPaciente.id_paciente}.${extension}`);
         await fs.writeFile(path.join(__dirname, '..', imagePath), imagenBase64, 'base64');
         await newPaciente.update({ foto_ruta: imagePath }, { transaction: t });
+      }
+
+      // Función para detectar tipo de imagen desde base64
+      function detectImageType(base64String) {
+        const signatures = {
+          '/9j/': 'jpg',
+          'iVBORw0KGgo': 'png',
+          'R0lGOD': 'gif',
+          'UklGR': 'webp'
+        };
+
+        for (const [signature, extension] of Object.entries(signatures)) {
+          if (base64String.startsWith(signature)) {
+            return extension;
+          }
+        }
+        return null;
       }
 
       // relacionar en tabla cliente_paciente

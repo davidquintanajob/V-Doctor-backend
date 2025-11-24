@@ -27,7 +27,7 @@
   "scripts": {
     "dev": "nodemon app.js",
     "start": "node app.js",
-    "build": "pkg app.js --targets node16-win-x64 --out-path dist && node scripts/build.js"
+    "build": "pkg app.js --targets node16-win-x64 --out-path dist"
   },
   "pkg": {
     "assets": [

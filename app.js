@@ -7,6 +7,8 @@ const swaggerJsdoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
 require('dotenv').config();
 const jwt = require("jsonwebtoken");
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 
@@ -17,6 +19,9 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// ✅ SERVIR ARCHIVOS ESTÁTICOS
+app.use('/fotos', express.static(path.join(__dirname, 'fotos')));
 
 // Logger de solicitudes mejorado
 app.use((req, res, next) => {
@@ -305,9 +310,6 @@ app.use('/', servicioComplejoRoutes);
 app.use('/', fotoServicioComplejoRoutes);
 app.use('/', fotoConsultaRoutes);
 app.use('/', ventaRoutes);
-
-const fs = require('fs');
-const path = require('path');
 
 // Iniciar servidor y sincronizar BD
 const startApp = async () => {
