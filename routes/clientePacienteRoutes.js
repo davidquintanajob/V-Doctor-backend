@@ -266,4 +266,44 @@ router.get('/cliente_paciente/clients-by-patient/:id_paciente', authenticate(), 
  */
 router.get('/cliente_paciente/patients-by-client/:id_cliente', authenticate(), clientePacienteController.patientsByClient);
 
+/**
+ * @swagger
+ * /cliente_paciente/Sync:
+ *   post:
+ *     summary: Sincronizar relaciones entre listas de clientes y pacientes
+ *     tags: [Cliente-Paciente]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - clientes
+ *               - pacientes
+ *             properties:
+ *               clientes:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Lista de IDs de clientes (al menos 1)
+ *               pacientes:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Lista de IDs de pacientes (al menos 1)
+ *     responses:
+ *       200:
+ *         description: Relaciones sincronizadas exitosamente
+ *       400:
+ *         description: Datos inválidos
+ *       404:
+ *         description: Algún cliente o paciente no fue encontrado
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.post('/cliente_paciente/Sync', authenticate(), clientePacienteController.syncRelations);
+
 module.exports = router;

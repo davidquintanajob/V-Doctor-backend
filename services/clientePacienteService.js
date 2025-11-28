@@ -127,6 +127,48 @@ const getPatientsByClientId = async (id_cliente) => {
   }
 };
 
+// Reemplaza (sincroniza) las relaciones entre las listas de clientes y pacientes
+// - Elimina cualquier relación existente entre los pares (cliente in clientIds AND paciente in patientIds)
+// - Crea todas las combinaciones (producto cartesiano) entre clientIds y patientIds
+const syncRelationsBetween = async (clientIds, patientIds) => {
+  if (!Array.isArray(clientIds) || !Array.isArray(patientIds)) {
+    const err = new Error('Los parámetros clientIds y patientIds deben ser arreglos');
+    err.status = 400;
+    throw err;
+  }
+  const t = await sequelize.transaction();
+  try {
+    // eliminar relaciones existentes entre los clientes y pacientes indicados
+    await ClientePaciente.destroy({ where: { id_cliente: clientIds, id_paciente: patientIds }, transaction: t });
+
+    // construir array con todas las combinaciones
+    const toCreate = [];
+    for (const c of clientIds) {
+      for (const p of patientIds) {
+        toCreate.push({ id_cliente: c, id_paciente: p });
+      }
+    }
+
+    let created = [];
+    if (toCreate.length) {
+      created = await ClientePaciente.bulkCreate(toCreate, { transaction: t, ignoreDuplicates: true });
+    }
+
+    await t.commit();
+    return created;
+  } catch (error) {
+    await t.rollback();
+    console.error('Error en servicio syncRelationsBetween cliente_paciente:', error);
+    if (!error.errors || !Array.isArray(error.errors)) {
+      const err = new Error(error.message || 'Error interno al sincronizar relaciones cliente_paciente');
+      err.errors = [error.message || 'Error interno al sincronizar relaciones cliente_paciente'];
+      err.status = error.status || 500;
+      throw err;
+    }
+    throw error;
+  }
+};
+
 module.exports = {
   getAll,
   getByIds,
@@ -135,4 +177,6 @@ module.exports = {
   updateRelation,
   getClientsByPatientId,
   getPatientsByClientId
+  ,
+  syncRelationsBetween
 };

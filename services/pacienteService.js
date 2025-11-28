@@ -66,7 +66,7 @@ const createPaciente = async (pacienteData) => {
     // Si viene imagen, guardarla
     if (imagenBase64) {
       const FOTOS_CARPETA_PACIENTE = process.env.FOTOS_CARPETA_PACIENTE || '/fotos/paciente';
-      const imagePath = path.join(FOTOS_CARPETA_PACIENTE, `${newPaciente.id_paciente}`);
+      const imagePath = path.join(FOTOS_CARPETA_PACIENTE, `${newPaciente.id_paciente}.jpg`);
       await fs.writeFile(path.join(__dirname, '..', imagePath), imagenBase64, 'base64');
       await newPaciente.update({ foto_ruta: imagePath });
     }
@@ -101,7 +101,7 @@ const updatePaciente = async (id, pacienteData) => {
     // Si viene imagen, guardarla y actualizar foto_ruta
     if (imagenBase64) {
       const FOTOS_CARPETA_PACIENTE = process.env.FOTOS_CARPETA_PACIENTE || '/fotos/paciente';
-      const imagePath = path.join(FOTOS_CARPETA_PACIENTE, `${paciente.id_paciente}`);
+      const imagePath = path.join(FOTOS_CARPETA_PACIENTE, `${paciente.id_paciente}.jpg`);
       await fs.writeFile(path.join(__dirname, '..', imagePath), imagenBase64, 'base64');
       await paciente.update({ foto_ruta: imagePath });
     }
@@ -135,6 +135,19 @@ const deletePaciente = async (id) => {
       return false;
     }
 
+    // ✅ NUEVO: Eliminar la foto del paciente si existe
+    if (paciente.foto_ruta) {
+      try {
+        const fullPath = path.join(__dirname, '..', paciente.foto_ruta);
+        await fs.access(fullPath); // Verificar si el archivo existe
+        await fs.unlink(fullPath); // Eliminar el archivo
+        console.log(`✅ Foto eliminada: ${paciente.foto_ruta}`);
+      } catch (fileError) {
+        console.warn(`⚠️ No se pudo eliminar la foto: ${paciente.foto_ruta}`, fileError.message);
+        // Continuar con la eliminación del paciente aunque falle la eliminación de la foto
+      }
+    }
+
     // Eliminar relaciones en cliente_paciente primero
     await ClientePaciente.destroy({ where: { id_paciente: id }, transaction: t });
 
@@ -160,18 +173,25 @@ const filterPacientesPaginated = async (filterCriteria, limit, offset) => {
   try {
     const whereClause = {};
     const include = [
-      { model: Cliente, through: { attributes: [] }, required: false }
+      { 
+        model: Cliente, 
+        through: { attributes: [] }, 
+        required: false
+      }
     ];
 
-    // special filter by client name
-    if (filterCriteria && filterCriteria.nombre_cliente) {
-      include[0].where = { nombre: { [Op.iLike]: `%${filterCriteria.nombre_cliente}%` } };
+    // Filtro especial por nombre del cliente
+    if (filterCriteria && filterCriteria.nombre_cliente && filterCriteria.nombre_cliente.trim() !== '') {
+      include[0].where = { 
+        nombre: { [Op.iLike]: `%${filterCriteria.nombre_cliente.trim()}%` } 
+      };
+      include[0].required = true;
       delete filterCriteria.nombre_cliente;
     }
 
-    // special filter 'descripcion' -> search across nombre, raza, especie
-    if (filterCriteria && filterCriteria.descripcion) {
-      const val = String(filterCriteria.descripcion);
+    // Filtro especial 'descripcion' -> busca en nombre, raza, especie
+    if (filterCriteria && filterCriteria.descripcion && filterCriteria.descripcion.trim() !== '') {
+      const val = String(filterCriteria.descripcion).trim();
       whereClause[Op.or] = [
         { nombre: { [Op.iLike]: `%${val}%` } },
         { raza: { [Op.iLike]: `%${val}%` } },
@@ -180,10 +200,34 @@ const filterPacientesPaginated = async (filterCriteria, limit, offset) => {
       delete filterCriteria.descripcion;
     }
 
+    // Filtros normales para los campos del paciente
     for (const key in filterCriteria) {
       if (Object.prototype.hasOwnProperty.call(filterCriteria, key)) {
-        if (filterCriteria[key] === undefined || filterCriteria[key] === null) continue;
-        whereClause[key] = { [Op.iLike]: `%${String(filterCriteria[key]).toLowerCase()}%` };
+        if (filterCriteria[key] === undefined || filterCriteria[key] === null || filterCriteria[key] === '') continue;
+        
+        // Define los tipos de campos
+        const stringFields = ['nombre', 'raza', 'especie', 'sexo', 'chip', 'comprado_adoptado', 'motivo_fallecimiento'];
+        const numericFields = ['numero_clinico', 'agresividad', 'descuento'];
+        const dateFields = ['fecha_nacimiento'];
+
+        if (stringFields.includes(key)) {
+          // Campos de texto - usar ILIKE
+          whereClause[key] = { [Op.iLike]: `%${String(filterCriteria[key]).trim()}%` };
+        } else if (numericFields.includes(key)) {
+          // Campos numéricos - usar igualdad o conversión
+          const numericValue = parseInt(filterCriteria[key]);
+          if (!isNaN(numericValue)) {
+            whereClause[key] = numericValue;
+          } else {
+            // Si no es un número válido, buscar como string (convertir a texto)
+            whereClause[key] = { [Op.iLike]: `%${String(filterCriteria[key]).trim()}%` };
+          }
+        } else if (dateFields.includes(key)) {
+          // Campos de fecha - manejo especial
+          if (filterCriteria[key] instanceof Date || !isNaN(Date.parse(filterCriteria[key]))) {
+            whereClause[key] = filterCriteria[key];
+          }
+        }
       }
     }
 
@@ -192,18 +236,23 @@ const filterPacientesPaginated = async (filterCriteria, limit, offset) => {
       limit,
       offset,
       include,
-      distinct: true
+      distinct: true,
+      order: [['createdAt', 'DESC']]
     });
+    
     return result;
   } catch (error) {
     console.error('Error en servicio filterPacientesPaginated:', error);
-    if (!error.errors || !Array.isArray(error.errors)) {
-      const err = new Error(error.message || 'Error interno al filtrar pacientes');
-      err.errors = [error.message || 'Error interno al filtrar pacientes'];
-      err.status = error.status || 500;
+    
+    if (error.name === 'SequelizeDatabaseError') {
+      const err = new Error('Error de base de datos al filtrar pacientes');
+      err.status = 400;
       throw err;
     }
-    throw error;
+    
+    const err = new Error(error.message || 'Error interno al filtrar pacientes');
+    err.status = error.status || 500;
+    throw err;
   }
 };
 
@@ -229,7 +278,7 @@ const createPacienteWithClients = async (pacienteData, clientesList) => {
     // Si viene imagen, guardarla
     if (imagenBase64) {
       const FOTOS_CARPETA_PACIENTE = process.env.FOTOS_CARPETA_PACIENTE || '/fotos/paciente';
-      const imagePath = path.join(FOTOS_CARPETA_PACIENTE, `${newPaciente.id_paciente}`);
+      const imagePath = path.join(FOTOS_CARPETA_PACIENTE, `${newPaciente.id_paciente}.jpg`);
       await fs.writeFile(path.join(__dirname, '..', imagePath), imagenBase64, 'base64');
       await newPaciente.update({ foto_ruta: imagePath }, { transaction: t });
     }

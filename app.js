@@ -12,6 +12,12 @@ const path = require('path');
 
 const app = express();
 
+// ✅ AGREGAR ESTO: Configurar límite de tamaño para JSON (ej: 50MB)
+app.use(express.json({ limit: '50mb' }));
+
+// ✅ TAMBIÉN AGREGAR ESTO: Para datos de formularios si los usas
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
 // Middlewares
 app.use(express.json());
 app.use(cors({

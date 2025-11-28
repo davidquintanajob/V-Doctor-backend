@@ -1,4 +1,6 @@
 const clientePacienteService = require('../services/clientePacienteService');
+const { Cliente } = require('../models/cliente');
+const { Paciente } = require('../models/paciente');
 
 const getAll = async (req, res) => {
   try {
@@ -111,6 +113,45 @@ const patientsByClient = async (req, res) => {
   }
 };
 
+// Sincroniza relaciones entre listas de clientes y pacientes
+const syncRelations = async (req, res) => {
+  try {
+    const { clientes, pacientes } = req.body || {};
+    const errors = [];
+    if (!Array.isArray(clientes) || clientes.length === 0) errors.push('La lista "clientes" debe ser un arreglo con al menos 1 elemento');
+    if (!Array.isArray(pacientes) || pacientes.length === 0) errors.push('La lista "pacientes" debe ser un arreglo con al menos 1 elemento');
+    if (errors.length) return res.status(400).json({ errors });
+
+    // validar que todos los ids sean numéricos
+    const clientIds = clientes.map((v) => parseInt(v, 10));
+    const patientIds = pacientes.map((v) => parseInt(v, 10));
+    const nonNumeric = [];
+    clientIds.forEach((id, idx) => { if (isNaN(id)) nonNumeric.push(`clientes[${idx}]`); });
+    patientIds.forEach((id, idx) => { if (isNaN(id)) nonNumeric.push(`pacientes[${idx}]`); });
+    if (nonNumeric.length) return res.status(400).json({ errors: [`Los siguientes elementos deben ser numéricos: ${nonNumeric.join(', ')}`] });
+
+    // comprobar existencia de todos los clientes y pacientes
+    const foundClients = await Cliente.findAll({ where: { id_cliente: clientIds } });
+    const foundPatients = await Paciente.findAll({ where: { id_paciente: patientIds } });
+    const foundClientIds = foundClients.map(c => c.id_cliente);
+    const foundPatientIds = foundPatients.map(p => p.id_paciente);
+
+    const missingClients = clientIds.filter(id => !foundClientIds.includes(id));
+    const missingPatients = patientIds.filter(id => !foundPatientIds.includes(id));
+    const notFoundErrors = [];
+    if (missingClients.length) notFoundErrors.push(`Clientes no encontrados: ${missingClients.join(', ')}`);
+    if (missingPatients.length) notFoundErrors.push(`Pacientes no encontrados: ${missingPatients.join(', ')}`);
+    if (notFoundErrors.length) return res.status(404).json({ errors: notFoundErrors });
+
+    const created = await clientePacienteService.syncRelationsBetween(clientIds, patientIds);
+    res.status(200).json({ message: 'Relaciones sincronizadas correctamente', created: Array.isArray(created) ? created.length : 0 });
+  } catch (error) {
+    const status = error.status || 500;
+    const errs = error.errors && Array.isArray(error.errors) ? error.errors : [error.message || 'Error al sincronizar relaciones'];
+    res.status(status).json({ errors: errs });
+  }
+};
+
 module.exports = {
   getAll,
   getByIds,
@@ -119,4 +160,6 @@ module.exports = {
   remove,
   clientsByPatient,
   patientsByClient
+  ,
+  syncRelations
 };
