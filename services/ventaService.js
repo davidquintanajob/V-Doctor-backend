@@ -10,6 +10,9 @@ const { Medicamento } = require('../models/medicamento');
 const { Paciente } = require('../models/paciente');
 const { VentaUsuario } = require('../models/venta_usuario');
 const sequelize = require('../helpers/database');
+const { FotoServicioComplejo } = require('../models/foto_servicio_complejo');
+const fs = require('fs').promises;
+const path = require('path');
 
 const getAllVentas = async () => {
   try {
@@ -231,6 +234,25 @@ const validateCreate = async (ventaData) => {
     }
   }
 
+  // Validar imagenes_servicio_complejo si el comerciable es un servicio complejo
+  if (ventaData.id_comerciable) {
+    const isSC = await ServicioComplejo.findByPk(ventaData.id_comerciable);
+    if (isSC) {
+      const imgs = ventaData.imagenes_servicio_complejo;
+      if (imgs !== undefined && imgs !== null) {
+        if (!Array.isArray(imgs)) {
+          errors.push('imagenes_servicio_complejo debe ser un arreglo');
+        } else {
+          for (const [idx, imgObj] of imgs.entries()) {
+            if (!imgObj || !imgObj.imagen) {
+              errors.push(`imagenes_servicio_complejo[${idx}].imagen es obligatorio para servicios complejos`);
+            }
+          }
+        }
+      }
+    }
+  }
+
   return {
     valid: errors.length === 0,
     errors: errors.length > 0 ? errors : undefined
@@ -364,9 +386,13 @@ const createVenta = async (ventaData) => {
   const t = await sequelize.transaction();
   try {
     const usuarios = ventaData.id_usuario;
-    // Crear venta excluyendo id_usuario (tabla pivot)
+    // Separar imagenes (si vienen)
+    const imagenesList = ventaData.imagenes_servicio_complejo;
+
+    // Crear venta excluyendo id_usuario y las imagenes (tabla pivot)
     const toCreate = { ...ventaData };
     delete toCreate.id_usuario;
+    delete toCreate.imagenes_servicio_complejo;
 
     const newVenta = await Venta.create(toCreate, { transaction: t });
 
@@ -386,6 +412,26 @@ const createVenta = async (ventaData) => {
     // Asociar usuarios
     const bulk = usuarios.map(uId => ({ id_venta: newVenta.id_venta, id_usuario: uId }));
     await VentaUsuario.bulkCreate(bulk, { transaction: t });
+
+    // Si el comerciable es un servicio complejo y vienen imagenes, crearlas
+    if (imagenesList && Array.isArray(imagenesList) && newVenta.id_comerciable) {
+      const isSC = await ServicioComplejo.findByPk(newVenta.id_comerciable, { transaction: t });
+      if (isSC) {
+        const FOTOS_CARPETA_SERVICIO_COMPLEJO = process.env.FOTOS_CARPETA_SERVICIO_COMPLEJO || "fotos/servicio_complejo";
+        const dirPath = path.join(__dirname, '..', FOTOS_CARPETA_SERVICIO_COMPLEJO);
+        await fs.mkdir(dirPath, { recursive: true });
+
+        for (const imgObj of imagenesList) {
+          const imagen = imgObj.imagen;
+          const nota = imgObj.nota || null;
+          const newFoto = await FotoServicioComplejo.create({ ruta: '', nota, id_venta: newVenta.id_venta }, { transaction: t });
+          const fileName = `${newVenta.id_comerciable}_${newFoto.id_foto_servicio_complejo}.jpg`;
+          const imagePath = path.join(FOTOS_CARPETA_SERVICIO_COMPLEJO, fileName);
+          await fs.writeFile(path.join(__dirname, '..', imagePath), Buffer.from(imagen, 'base64'));
+          await newFoto.update({ ruta: imagePath }, { transaction: t });
+        }
+      }
+    }
 
     await t.commit();
     return await getVentaById(newVenta.id_venta);
@@ -407,6 +453,8 @@ const updateVenta = async (id, ventaData) => {
     const usuarios = ventaData.id_usuario !== undefined ? ventaData.id_usuario : undefined;
     const toUpdate = { ...ventaData };
     delete toUpdate.id_usuario;
+    const imagenesList = toUpdate.imagenes_servicio_complejo;
+    delete toUpdate.imagenes_servicio_complejo;
 
     // Manejar cambios de cantidad y comerciable
     if (ventaData.cantidad !== undefined && ventaData.cantidad !== venta.cantidad) {
@@ -445,6 +493,39 @@ const updateVenta = async (id, ventaData) => {
       await VentaUsuario.bulkCreate(bulk, { transaction: t });
     }
 
+    // Manejar imagenes si se proporcionaron (solo si la venta actual o la nueva referencia es servicio complejo)
+    if (imagenesList !== undefined) {
+      const idComerciableEffective = toUpdate.id_comerciable !== undefined ? toUpdate.id_comerciable : venta.id_comerciable;
+      const isSC = idComerciableEffective ? await ServicioComplejo.findByPk(idComerciableEffective, { transaction: t }) : null;
+      if (isSC) {
+        // eliminar fotos existentes
+        const existingFotos = await FotoServicioComplejo.findAll({ where: { id_venta: id }, transaction: t });
+        for (const f of existingFotos) {
+          if (f.ruta) {
+            try { await fs.unlink(path.join(__dirname, '..', f.ruta)); } catch (e) { console.error('unlink error', e); }
+          }
+          await f.destroy({ transaction: t });
+        }
+
+        // crear nuevas fotos
+        const FOTOS_CARPETA_SERVICIO_COMPLEJO = process.env.FOTOS_CARPETA_SERVICIO_COMPLEJO || "fotos/servicio_complejo";
+        const dirPath = path.join(__dirname, '..', FOTOS_CARPETA_SERVICIO_COMPLEJO);
+        await fs.mkdir(dirPath, { recursive: true });
+
+        for (const imgObj of imagenesList) {
+          const imagen = imgObj.imagen;
+          const nota = imgObj.nota || null;
+          const newFoto = await FotoServicioComplejo.create({ ruta: '', nota, id_venta: id }, { transaction: t });
+          const fileName = `${idComerciableEffective}_${newFoto.id_foto_servicio_complejo}.jpg`;
+          const imagePath = path.join(FOTOS_CARPETA_SERVICIO_COMPLEJO, fileName);
+          await fs.writeFile(path.join(__dirname, '..', imagePath), Buffer.from(imagen, 'base64'));
+          await newFoto.update({ ruta: imagePath }, { transaction: t });
+        }
+      } else {
+        // Si no es servicio complejo, ignorar la lista (según requisito)
+      }
+    }
+
     await t.commit();
     return await getVentaById(id);
   } catch (error) {
@@ -478,6 +559,14 @@ const deleteVenta = async (id) => {
 
     // Eliminar asociaciones pivot
     await VentaUsuario.destroy({ where: { id_venta: id }, transaction: t });
+    // Eliminar fotos asociadas a esta venta (y archivos)
+    const fotos = await FotoServicioComplejo.findAll({ where: { id_venta: id }, transaction: t });
+    for (const f of fotos) {
+      if (f.ruta) {
+        try { await fs.unlink(path.join(__dirname, '..', f.ruta)); } catch (e) { console.error('unlink error', e); }
+      }
+      await f.destroy({ transaction: t });
+    }
     // Eliminar la venta
     await venta.destroy({ transaction: t });
 

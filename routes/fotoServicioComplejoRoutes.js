@@ -37,7 +37,7 @@ router.get('/FotoServicioComplejo/:id', authenticate(), fotoServicioComplejoCont
  * @swagger
  * /FotoServicioComplejo/create:
  *   post:
- *     summary: Crea una nueva foto de servicio complejo.
+ *     summary: Crea una nueva foto de servicio complejo asociada a una venta.
  *     tags: [FotoServicioComplejo]
  *     security:
  *       - bearerAuth: []
@@ -48,13 +48,18 @@ router.get('/FotoServicioComplejo/:id', authenticate(), fotoServicioComplejoCont
  *           schema:
  *             type: object
  *             properties:
- *               id_comerciable_servicio_complejo:
+ *               id_venta:
  *                 type: integer
+ *                 description: ID de la venta a la que pertenece la foto (obligatorio)
+ *               imagen:
+ *                 type: string
+ *                 description: Imagen en Base64 (se guardará como .jpg)
  *               nota:
  *                 type: string
- *               ruta:
- *                 type: string
- *                 format: byte
+ *                 description: Nota opcional para la foto
+ *             required:
+ *               - id_venta
+ *               - imagen
  *     responses:
  *       201:
  *         description: La foto del servicio complejo creada.
@@ -85,9 +90,9 @@ router.post('/FotoServicioComplejo/create', authenticate(), fotoServicioComplejo
  *             properties:
  *               nota:
  *                 type: string
- *               ruta:
+ *               imagen:
  *                 type: string
- *                 format: byte
+ *                 description: Imagen en Base64 (se guardará como .jpg). Si se omite, solo se actualiza la nota.
  *     responses:
  *       200:
  *         description: La foto del servicio complejo actualizada.
@@ -119,7 +124,7 @@ router.delete('/FotoServicioComplejo/delete/:id', authenticate(), fotoServicioCo
  * @swagger
  * /FotoServicioComplejo/servicio/{id}:
  *   get:
- *     summary: Obtiene todas las fotos de un servicio complejo.
+ *     summary: Obtiene todas las fotos asociadas a las ventas de un `servicio_complejo`.
  *     tags: [FotoServicioComplejo]
  *     security:
  *       - bearerAuth: []

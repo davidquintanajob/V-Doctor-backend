@@ -104,6 +104,7 @@ Venta.associate = function (models) {
   Venta.belongsTo(models.Consulta, { foreignKey: 'id_consulta' });
   Venta.belongsTo(models.ServicioComplejo, { foreignKey: 'id_servicio_complejo', targetKey: 'id_comerciable' });
   Venta.belongsTo(models.Comerciable, { foreignKey: 'id_comerciable' });
+  Venta.hasMany(models.FotoServicioComplejo, { foreignKey: 'id_venta', sourceKey: 'id_venta' });
 };
 
 module.exports = { Venta, formasDePago };

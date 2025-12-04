@@ -38,10 +38,7 @@ const getServicioComplejoById = async (id, transaction) => {
                 as: 'venta',
                 required: false,
             },
-            {
-                model: FotoServicioComplejo,
-                required: false,
-            },
+
             {
                 model: Calendario,
                 required: false,
@@ -87,20 +84,7 @@ const createServicioComplejo = async (servicioComplejoData) => {
             }, { transaction: t });
         }
 
-        if (foto_servicio_complejo && foto_servicio_complejo.length > 0) {
-            const FOTOS_CARPETA_SERVICIO_COMPLEJO = process.env.FOTOS_CARPETA_SERVICIO_COMPLEJO || "/fotos/servicio_complejo/";
-            for (const foto of foto_servicio_complejo) {
-                const newFoto = await FotoServicioComplejo.create({
-                    nota: foto.nota,
-                    ruta: '',
-                    id_comerciable_servicio_complejo: servicioComplejo.id_comerciable,
-                }, { transaction: t });
-
-                const imagePath = path.join(FOTOS_CARPETA_SERVICIO_COMPLEJO, `${servicioComplejo.id_comerciable}-${newFoto.id_foto_servicio_complejo}`);
-                await fs.writeFile(path.join(__dirname, '..', imagePath), foto.ruta, 'base64');
-                await newFoto.update({ ruta: imagePath }, { transaction: t });
-            }
-        }
+        // Fotos de servicio complejos ahora se gestionan por venta. Ignorar fotos en la creación del servicio complejo.
 
         await t.commit();
         return await getServicioComplejoById(servicioComplejo.id_comerciable);
@@ -156,41 +140,7 @@ const updateServicioComplejo = async (id, servicioComplejoData) => {
             }, { transaction: t });
         }
 
-        if (foto_servicio_complejo) {
-            const FOTOS_CARPETA_SERVICIO_COMPLEJO = process.env.FOTOS_CARPETA_SERVICIO_COMPLEJO || "/fotos/servicio_complejo/";
-            const existingFotos = await FotoServicioComplejo.findAll({ where: { id_comerciable_servicio_complejo: id }, transaction: t });
-            const existingFotoIds = existingFotos.map(f => f.id_foto_servicio_complejo);
-            const incomingFotoIds = foto_servicio_complejo.map(f => f.id_foto_servicio_complejo).filter(id => id);
-
-            const fotosToDelete = existingFotos.filter(f => !incomingFotoIds.includes(f.id_foto_servicio_complejo));
-            for (const foto of fotosToDelete) {
-                await fs.unlink(path.join(__dirname, '..', foto.ruta));
-                await foto.destroy({ transaction: t });
-            }
-
-            for (const fotoData of foto_servicio_complejo) {
-                if (fotoData.id_foto_servicio_complejo) {
-                    const foto = await FotoServicioComplejo.findByPk(fotoData.id_foto_servicio_complejo, { transaction: t });
-                    if (foto) {
-                        await foto.update({ nota: fotoData.nota }, { transaction: t });
-                        if (fotoData.ruta) {
-                            const imagePath = path.join(FOTOS_CARPETA_SERVICIO_COMPLEJO, `${id}-${foto.id_foto_servicio_complejo}`);
-                            await fs.writeFile(path.join(__dirname, '..', imagePath), fotoData.ruta, 'base64');
-                            await foto.update({ ruta: imagePath }, { transaction: t });
-                        }
-                    }
-                } else {
-                    const newFoto = await FotoServicioComplejo.create({
-                        nota: fotoData.nota,
-                        ruta: '',
-                        id_comerciable_servicio_complejo: id,
-                    }, { transaction: t });
-                    const imagePath = path.join(FOTOS_CARPETA_SERVICIO_COMPLEJO, `${id}-${newFoto.id_foto_servicio_complejo}`);
-                    await fs.writeFile(path.join(__dirname, '..', imagePath), fotoData.ruta, 'base64');
-                    await newFoto.update({ ruta: imagePath }, { transaction: t });
-                }
-            }
-        }
+        // Fotos de servicio complejo se administran a través de las ventas. Ignorar modificaciones de fotos aquí.
 
         await t.commit();
         return await getServicioComplejoById(id);
@@ -210,7 +160,11 @@ const updateServicioComplejo = async (id, servicioComplejoData) => {
 const deleteServicioComplejo = async (id) => {
     const t = await sequelize.transaction();
     try {
-        const servicioComplejo = await ServicioComplejo.findOne({ where: { id_comerciable: id }, transaction: t });
+        const servicioComplejo = await ServicioComplejo.findOne({
+            where: { id_comerciable: id },
+            transaction: t
+        });
+
         if (!servicioComplejo) {
             await t.rollback();
             const error = new Error(`Servicio complejo con ID ${id} no encontrado`);
@@ -218,34 +172,76 @@ const deleteServicioComplejo = async (id) => {
             throw error;
         }
 
-        const fotos = await FotoServicioComplejo.findAll({ where: { id_comerciable_servicio_complejo: id }, transaction: t });
-        for (const foto of fotos) {
-            if (foto.ruta) {
-                try {
-                    await fs.unlink(path.join(__dirname, '..', foto.ruta));
-                } catch (err) {
-                    console.error(`Failed to delete file: ${foto.ruta}`, err);
-                }
-            }
+        // Validar que no haya ventas relacionadas
+        const ventasRelacionadas = await Venta.count({
+            where: { id_servicio_complejo: id },
+            transaction: t
+        });
+
+        if (ventasRelacionadas > 0) {
+            await t.rollback();
+            const error = new Error(`Este servicio complejo tiene ${ventasRelacionadas} venta(s) relacionada(s). No se puede eliminar un servicio complejo que tiene ventas asociadas.`);
+            error.status = 409;
+            throw error;
         }
 
-        await FotoServicioComplejo.destroy({ where: { id_comerciable_servicio_complejo: id }, transaction: t });
-        await Calendario.destroy({ where: { id_comerciable_servicio_complejo: id }, transaction: t });
+        // Eliminar fotos asociadas a las ventas de este servicio complejo
+        const ventas = await Venta.findAll({
+            where: { id_servicio_complejo: id },
+            transaction: t
+        });
+
+        for (const venta of ventas) {
+            const fotos = await FotoServicioComplejo.findAll({
+                where: { id_venta: venta.id_venta },
+                transaction: t
+            });
+
+            for (const foto of fotos) {
+                if (foto.ruta) {
+                    try {
+                        await fs.unlink(path.join(__dirname, '..', foto.ruta));
+                    } catch (err) {
+                        console.error(`Failed to delete file: ${foto.ruta}`, err);
+                    }
+                }
+            }
+
+            await FotoServicioComplejo.destroy({
+                where: { id_venta: venta.id_venta },
+                transaction: t
+            });
+        }
+
+        await Calendario.destroy({
+            where: { id_comerciable_servicio_complejo: id },
+            transaction: t
+        });
+
         await servicioComplejo.destroy({ transaction: t });
         await servicioService.deleteServicio(id, t);
 
         await t.commit();
         return true;
+
     } catch (error) {
-        await t.rollback();
-        console.error("Error en el servicio de eliminar servicio complejo:", error);
-        if (!error.errors || !Array.isArray(error.errors)) {
-            const err = new Error(error.message || 'Error interno al eliminar servicio complejo');
-            err.errors = [error.message || 'Error interno al eliminar servicio complejo'];
-            err.status = error.status || 500;
-            throw err;
+        // VERIFICAR si la transacción ya fue finalizada
+        if (t && !t.finished) {
+            await t.rollback();
         }
-        throw error;
+
+        console.error("Error en el servicio de eliminar servicio complejo:", error);
+
+        // Si el error ya tiene status (de los rollbacks anteriores), lanzarlo tal cual
+        if (error.status) {
+            throw error;
+        }
+
+        // Si es un error no esperado, crear uno nuevo
+        const err = new Error(error.message || 'Error interno al eliminar servicio complejo');
+        err.errors = [error.message || 'Error interno al eliminar servicio complejo'];
+        err.status = error.status || 500;
+        throw err;
     }
 };
 
@@ -316,10 +312,7 @@ const filterServiciosComplejosPaginated = async (filterCriteria, limit, offset) 
                     as: 'venta',
                     required: false,
                 },
-                {
-                    model: FotoServicioComplejo,
-                    required: false,
-                },
+
                 {
                     model: Calendario,
                     required: false,
@@ -368,10 +361,7 @@ const getAllServiciosComplejos = async () => {
                     as: 'venta',
                     required: false,
                 },
-                {
-                    model: FotoServicioComplejo,
-                    required: false,
-                },
+
                 {
                     model: Calendario,
                     required: false,

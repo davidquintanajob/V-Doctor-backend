@@ -41,7 +41,7 @@ const deleteFotoServicioComplejo = async (req, res) => {
 
 const getFotosByServicioComplejoId = async (req, res) => {
     try {
-        const fotos = await fotoServicioComplejoService.getFotosByServicioComplejoId(req.params.id);
+        const fotos = await fotoServicioComplejoService.getFotosByServicioId(req.params.id);
         res.json(fotos);
     } catch (error) {
         res.status(500).json({ errors: [error.message] });

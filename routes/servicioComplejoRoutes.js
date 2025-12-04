@@ -24,7 +24,7 @@ const upload = multer({ storage: storage });
  * tags:
  *   name: ServicioComplejo
  *   description: API para gestionar servicios complejos
- * 
+ *
  * @swagger
  * components:
  *   schemas:
@@ -43,14 +43,31 @@ const upload = multer({ storage: storage });
  *         precio:
  *           type: number
  *           description: El precio del servicio complejo.
+ *         foto_servicio_complejos:
+ *           type: array
+ *           description: Fotos relacionadas a las ventas del servicio complejo (agregadas desde las ventas). Cada elemento contiene la ruta del archivo, la nota y el id de la venta.
+ *           items:
+ *             type: object
+ *             properties:
+ *               id_venta:
+ *                 type: integer
+ *                 description: ID de la venta a la que pertenece la foto
+ *               ruta:
+ *                 type: string
+ *                 description: Ruta relativa del archivo guardado (ej. "fotos/servicio_complejo/123_1.jpg")
+ *               nota:
+ *                 type: string
  *         foto_servicio_complejo:
  *           type: array
+ *           description: >-
+ *             Campo **obsoleto/ignorado**: las fotos ahora se gestionan a través de ventas.
+ *             Para asociar imágenes a un servicio complejo, crear una `venta` cuyo `id_comerciable` sea el servicio complejo y enviar `imagenes_servicio_complejo` en el payload de la venta.
  *           items:
  *             type: object
  *             properties:
  *               imagen:
  *                 type: string
- *                 format: binary
+ *                 description: Imagen en Base64 (si se envía aquí será ignorada)
  *               nota:
  *                 type: string
  */

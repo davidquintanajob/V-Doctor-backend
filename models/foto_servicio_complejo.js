@@ -15,12 +15,12 @@ const FotoServicioComplejo = sequelize.define("foto_servicio_complejo", {
     type: DataTypes.STRING,
     allowNull: true,
   },
-  id_comerciable_servicio_complejo: {
+  id_venta: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'servicio_complejos',
-      key: 'id_comerciable'
+      model: 'ventas',
+      key: 'id_venta'
     }
   }
 }, {
@@ -28,7 +28,7 @@ const FotoServicioComplejo = sequelize.define("foto_servicio_complejo", {
 });
 
 FotoServicioComplejo.associate = function (models) {
-  FotoServicioComplejo.belongsTo(models.ServicioComplejo, { foreignKey: 'id_comerciable_servicio_complejo', targetKey: 'id_comerciable' });
+  FotoServicioComplejo.belongsTo(models.Venta, { foreignKey: 'id_venta', targetKey: 'id_venta' });
 };
 
 module.exports = { FotoServicioComplejo };
