@@ -5,6 +5,7 @@ const { Venta } = require("../models/venta");
 const { Entrada } = require("../models/entrada");
 const { Tarea } = require("../models/tarea");
 const { Calendario } = require("../models/calendario");
+const { VentaUsuario } = require("../models/venta_usuario");
 const { Op } = require('sequelize');
 
 // Helper: agrega totalFactura (servicios + productos + cargoAdicional)
@@ -145,33 +146,25 @@ const updateUsuario = async (id, userData) => {
  */
 const deleteUsuario = async (id) => {
   try {
-    const usuario = await Usuario.findOne({
-      where: { id_usuario: id },
-      include: [
-        { model: Entrada, limit: 1 },
-        { model: Venta, limit: 1, through: { attributes: [] } },
-        { model: Tarea, limit: 1 },
-        { model: Calendario, limit: 1 }
-      ]
-    });
+    const usuario = await Usuario.findOne({ where: { id_usuario: id } });
 
     if (!usuario) {
       return false; // Usuario no encontrado
     }
 
+    // Contar asociaciones por separado para evitar usar `include.limit`
+    const [entradasCount, ventasCount, tareasCount, calendariosCount] = await Promise.all([
+      Entrada.count({ where: { id_usuario: id } }),
+      VentaUsuario.count({ where: { id_usuario: id } }),
+      Tarea.count({ where: { id_usuario: id } }),
+      Calendario.count({ where: { id_usuario: id } })
+    ]);
+
     const associations = [];
-    if (usuario.entradas && usuario.entradas.length > 0) {
-      associations.push('entradas');
-    }
-    if (usuario.venta && usuario.venta.length > 0) {
-      associations.push('ventas');
-    }
-    if (usuario.tareas && usuario.tareas.length > 0) {
-      associations.push('tareas');
-    }
-    if (usuario.calendarios && usuario.calendarios.length > 0) {
-      associations.push('calendarios');
-    }
+    if (entradasCount && entradasCount > 0) associations.push('entradas');
+    if (ventasCount && ventasCount > 0) associations.push('ventas');
+    if (tareasCount && tareasCount > 0) associations.push('tareas');
+    if (calendariosCount && calendariosCount > 0) associations.push('calendarios');
 
     if (associations.length > 0) {
       const error = new Error(`No se puede eliminar el usuario porque está asociado con ${associations.join(', ')}.`);
@@ -214,9 +207,19 @@ const getUsuarioByNombreUsuario = async (nombre_usuario) => {
 const filterUsuariosPaginated = async (filterCriteria, limit, offset) => {
   try {
     const whereClause = {};
+    if (!filterCriteria || typeof filterCriteria !== 'object') filterCriteria = {};
     for (const key in filterCriteria) {
       if (Object.prototype.hasOwnProperty.call(filterCriteria, key)) {
-        whereClause[key] = { [Op.iLike]: `%${filterCriteria[key].toLowerCase()}%` };
+        const val = filterCriteria[key];
+        if (val === null || val === undefined || val === '') continue;
+        if (typeof val === 'boolean' || typeof val === 'number') {
+          // For booleans and numbers, use exact match
+          whereClause[key] = val;
+        } else {
+          // For other types, perform a case-insensitive partial match
+          const strVal = String(val).toLowerCase().trim();
+          whereClause[key] = { [Op.iLike]: `%${strVal}%` };
+        }
       }
     }
 

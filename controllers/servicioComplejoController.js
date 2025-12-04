@@ -7,7 +7,27 @@ const getServicioComplejoById = async (req, res) => {
         if (!servicioComplejo) {
             return res.status(404).json({ error: ['Servicio complejo no encontrado'] });
         }
-        res.json(servicioComplejo);
+        
+        // Transformar estructura: comerciable, servicio, servicio_complejo, venta del comerciable y ventas del servicio_complejo
+        const transformed = {
+            id_comerciable: servicioComplejo.id_comerciable,
+            tipo_servicio: servicioComplejo.tipo_servicio,
+            createdAt: servicioComplejo.createdAt,
+            updatedAt: servicioComplejo.updatedAt,
+            servicio: {
+                id_comerciable: servicioComplejo.servicio.id_comerciable,
+                descripcion: servicioComplejo.servicio.descripcion,
+                createdAt: servicioComplejo.servicio.createdAt,
+                updatedAt: servicioComplejo.servicio.updatedAt,
+                comerciable: servicioComplejo.servicio.comerciable,
+                venta: servicioComplejo.servicio.comerciable.venta || []
+            },
+            venta: servicioComplejo.venta || [],
+            foto_servicio_complejos: servicioComplejo.foto_servicio_complejos || [],
+            calendarios: servicioComplejo.calendarios || []
+        };
+        
+        res.json(transformed);
     } catch (error) {
         res.status(500).json({ error: [error.message] });
     }
@@ -73,18 +93,76 @@ const filterServiciosComplejosPaginated = async (req, res) => {
     try {
         const { limit, page } = req.params;
         const filterCriteria = req.body;
-        const offset = (page - 1) * limit;
-        const result = await servicioComplejoService.filterServiciosComplejosPaginated(filterCriteria, parseInt(limit), offset);
-        res.json(result);
+
+        const limitNum = parseInt(limit, 10);
+        const pageNum = parseInt(page, 10);
+
+        if (isNaN(limitNum) || limitNum <= 0 || isNaN(pageNum) || pageNum <= 0) {
+            return res.status(400).json({ error: 'Limit y page deben ser números enteros positivos' });
+        }
+
+        const offset = (pageNum - 1) * limitNum;
+        const { rows: serviciosComplejos, count: total } = await servicioComplejoService.filterServiciosComplejosPaginated(filterCriteria, limitNum, offset);
+
+        const totalPages = Math.ceil(total / limitNum);
+
+        // Transformar estructura: comerciable, servicio, servicio_complejo, venta del comerciable y ventas del servicio_complejo
+        const transformedData = serviciosComplejos.map(sc => ({
+            id_comerciable: sc.id_comerciable,
+            tipo_servicio: sc.tipo_servicio,
+            createdAt: sc.createdAt,
+            updatedAt: sc.updatedAt,
+            servicio: {
+                id_comerciable: sc.servicio.id_comerciable,
+                descripcion: sc.servicio.descripcion,
+                createdAt: sc.servicio.createdAt,
+                updatedAt: sc.servicio.updatedAt,
+                comerciable: sc.servicio.comerciable,
+                venta: sc.servicio.comerciable.venta || []
+            },
+            venta: sc.venta || [],
+            foto_servicio_complejos: sc.foto_servicio_complejos || [],
+            calendarios: sc.calendarios || []
+        }));
+
+        res.status(200).json({
+            data: transformedData,
+            pagination: {
+                total,
+                currentPage: pageNum,
+                limit: limitNum,
+                totalPages
+            }
+        });
     } catch (error) {
-        res.status(500).json({ errors: [error.message] });
+        res.status(error.status || 500).json({ error: error.message, details: error.errors });
     }
 };
 
 const getAllServiciosComplejos = async (req, res) => {
     try {
         const serviciosComplejos = await servicioComplejoService.getAllServiciosComplejos();
-        res.json(serviciosComplejos);
+        
+        // Transformar estructura para cada servicio complejo
+        const transformedData = serviciosComplejos.map(sc => ({
+            id_comerciable: sc.id_comerciable,
+            tipo_servicio: sc.tipo_servicio,
+            createdAt: sc.createdAt,
+            updatedAt: sc.updatedAt,
+            servicio: {
+                id_comerciable: sc.servicio.id_comerciable,
+                descripcion: sc.servicio.descripcion,
+                createdAt: sc.servicio.createdAt,
+                updatedAt: sc.servicio.updatedAt,
+                comerciable: sc.servicio.comerciable,
+                venta: sc.servicio.comerciable.venta || []
+            },
+            venta: sc.venta || [],
+            foto_servicio_complejos: sc.foto_servicio_complejos || [],
+            calendarios: sc.calendarios || []
+        }));
+        
+        res.json(transformedData);
     } catch (error) {
         res.status(500).json({ error: [error.message] });
     }

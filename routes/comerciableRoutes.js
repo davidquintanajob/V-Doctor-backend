@@ -93,6 +93,27 @@ router.get('/comerciable/:id', authenticate(), comerciableController.getComercia
  *                 type: number
  *               precio_usd_max:
  *                 type: number
+ *               isProducto:
+ *                 type: boolean
+ *                 description: Filtrar solo comerciables que tengan asociación `producto` cuando es `true`.
+ *               isMedicamento:
+ *                 type: boolean
+ *                 description: Filtrar solo comerciables cuyo `producto.medicamento` exista cuando es `true`.
+ *               isServicio:
+ *                 type: boolean
+ *                 description: Filtrar solo comerciables que tengan asociación `servicio` cuando es `true`.
+ *               isServicioComplejo:
+ *                 type: boolean
+ *                 description: Filtrar solo comerciables cuyo `servicio.servicio_complejo` exista cuando es `true`.
+ *           example:
+ *             nombre: ""
+ *             descripcion: ""
+ *             precio_cup_min: 0
+ *             precio_cup_max: 0
+ *             precio_usd_min: 0
+ *             precio_usd_max: 0
+ *             isProducto: true
+ *             isMedicamento: true
  *     responses:
  *       200:
  *         description: Comerciables filtrados con información de paginación

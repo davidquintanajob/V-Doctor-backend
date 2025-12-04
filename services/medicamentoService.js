@@ -22,6 +22,7 @@ const getMedicamentoById = async (id, transaction) => {
                             {
                                 model: Venta,
                                 required: false,
+                                as: "venta",
                             }
                         ]
                     },
@@ -51,6 +52,7 @@ const getAllMedicamentos = async () => {
                             {
                                 model: Venta,
                                 required: false,
+                                as: "venta",
                             }
                         ]
                     },
@@ -228,6 +230,7 @@ const filterMedicamentosPaginated = async (filterCriteria, limit, offset) => {
                                 {
                                     model: Venta,
                                     required: false,
+                                    as: "venta",
                                 }
                             ]
                         },

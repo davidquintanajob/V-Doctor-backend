@@ -32,7 +32,7 @@ const Comerciable = sequelize.define("comerciable", {
 Comerciable.associate = function (models) {
   Comerciable.hasOne(models.Producto, { foreignKey: 'id_comerciable' });
   Comerciable.hasOne(models.Servicio, { foreignKey: 'id_comerciable' });
-  Comerciable.hasMany(models.Venta, { foreignKey: 'id_comerciable' });
+  Comerciable.hasMany(models.Venta, { foreignKey: 'id_comerciable', as: 'venta' });
 };
 
 module.exports = { Comerciable };

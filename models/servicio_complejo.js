@@ -22,7 +22,7 @@ const ServicioComplejo = sequelize.define("servicio_complejo", {
 
 ServicioComplejo.associate = function (models) {
     ServicioComplejo.belongsTo(models.Servicio, { foreignKey: 'id_comerciable' });
-    ServicioComplejo.hasMany(models.Venta, { foreignKey: 'id_servicio_complejo', sourceKey: 'id_comerciable' });
+    ServicioComplejo.hasMany(models.Venta, { foreignKey: 'id_servicio_complejo', sourceKey: 'id_comerciable', as: 'venta' });
     ServicioComplejo.hasMany(models.FotoServicioComplejo, { foreignKey: 'id_comerciable_servicio_complejo', sourceKey: 'id_comerciable' });
     ServicioComplejo.hasMany(models.Calendario, { foreignKey: 'id_comerciable_servicio_complejo', sourceKey: 'id_comerciable' });
 };

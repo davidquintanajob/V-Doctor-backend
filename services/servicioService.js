@@ -17,6 +17,7 @@ const getAllServicios = async () => {
                         {
                             model: Venta,
                             required: false,
+                            as: "venta",
                         }
                     ]
                 },
@@ -56,6 +57,7 @@ const getServicioById = async (id, transaction) => {
                     {
                         model: Venta,
                         required: false,
+                        as: "venta",
                     }
                 ]
             },
@@ -234,6 +236,7 @@ const filterServiciosPaginated = async (filterCriteria, limit, offset) => {
                         {
                             model: Venta,
                             required: false,
+                            as: "venta",
                         }
                     ]
                 },

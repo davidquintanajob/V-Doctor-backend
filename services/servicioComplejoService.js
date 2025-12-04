@@ -23,11 +23,19 @@ const getServicioComplejoById = async (id, transaction) => {
                         model: Comerciable,
                         as: 'comerciable',
                         required: true,
+                        include: [
+                            {
+                                model: Venta,
+                                as: 'venta',
+                                required: false,
+                            }
+                        ]
                     }
                 ]
             },
             {
                 model: Venta,
+                as: 'venta',
                 required: false,
             },
             {
@@ -293,11 +301,19 @@ const filterServiciosComplejosPaginated = async (filterCriteria, limit, offset) 
                             as: 'comerciable',
                             where: whereClauseComerciable,
                             required: true,
+                            include: [
+                                {
+                                    model: Venta,
+                                    as: 'venta',
+                                    required: false,
+                                }
+                            ]
                         }
                     ]
                 },
                 {
                     model: Venta,
+                    as: 'venta',
                     required: false,
                 },
                 {
@@ -337,11 +353,19 @@ const getAllServiciosComplejos = async () => {
                             model: Comerciable,
                             as: 'comerciable',
                             required: true,
+                            include: [
+                                {
+                                    model: Venta,
+                                    as: 'venta',
+                                    required: false,
+                                }
+                            ]
                         }
                     ]
                 },
                 {
                     model: Venta,
+                    as: 'venta',
                     required: false,
                 },
                 {

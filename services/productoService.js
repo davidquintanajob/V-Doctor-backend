@@ -22,6 +22,7 @@ const getAllProductos = async () => {
             {
               model: Venta,
               required: false,
+              as: "venta",
             }
           ]
         },
@@ -63,6 +64,7 @@ const getProductoById = async (id, transaction) => {
           {
             model: Venta,
             required: false,
+            as: "venta",
           }
         ]
       },
@@ -171,12 +173,12 @@ const deleteProducto = async (id, transaction) => {
   try {
     const venta = await Venta.findOne({ where: { id_comerciable: id }, transaction: t });
     if (venta) {
-      throw new Error("No se puede eliminar el producto porque está asociado a una venta.");
+      throw new Error("No se puede eliminar el producto porque esté ya se ha vendido.");
     }
 
     const entrada = await Entrada.findOne({ where: { id_comerciable: id }, transaction: t });
     if (entrada) {
-      throw new Error("No se puede eliminar el producto porque está asociado a una entrada.");
+      throw new Error("No se puede eliminar el producto porque ya se ha registrado entradas.");
     }
 
     const producto = await Producto.findOne({ where: { id_comerciable: id }, transaction: t });
@@ -264,10 +266,9 @@ const filterProductosPaginated = async (filterCriteria, limit, offset) => {
       }
     }
 
-    const result = await Producto.findAndCountAll({
+    // Traer todos los productos que cumplan los criterios y luego filtrar por medicamento en memoria
+    const allResults = await Producto.findAll({
       where: whereClauseProducto,
-      limit,
-      offset,
       include: [
         {
           model: Comerciable,
@@ -277,6 +278,7 @@ const filterProductosPaginated = async (filterCriteria, limit, offset) => {
             {
               model: Venta,
               required: false,
+              as: "venta",
             }
           ]
         },
@@ -292,11 +294,15 @@ const filterProductosPaginated = async (filterCriteria, limit, offset) => {
       ]
     });
 
-    const productosFiltrados = result.rows.filter(producto => !producto.medicamento);
+    // Filtrar productos que NO sean medicamentos
+    const productosFiltrados = allResults.filter(producto => !producto.medicamento);
+
+    // Aplicar paginación después del filtrado
+    const paginatedResults = productosFiltrados.slice(offset, offset + limit);
 
     return {
       count: productosFiltrados.length,
-      rows: productosFiltrados,
+      rows: paginatedResults,
     };
   } catch (error) {
     console.error("Error en el servicio de filtrar productos:", error);
