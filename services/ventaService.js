@@ -745,6 +745,26 @@ const updateVentaUsuarios = async (id_venta, usuarios) => {
   }
 };
 
+const getVentasByPacienteAndTipoMedicamento = async (pacienteId, tipoMedicamento) => {
+  try {
+    const ventas = await Venta.findAll({
+      include: [
+        { model: Consulta, required: true, include: [{ model: Paciente, required: true, where: { id_paciente: pacienteId } }] },
+        { model: Comerciable, required: true, include: [
+          { model: Producto, required: true, include: [{ model: Medicamento, required: true, where: { tipo_medicamento: tipoMedicamento } }] },
+          { model: Servicio, required: false }
+        ] },
+        { model: Cliente, required: false },
+        { model: Usuario, required: false },
+        { model: ServicioComplejo, required: false }
+      ]
+    });
+    return ventas;
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   getAllVentas,
   getVentaById,
@@ -753,6 +773,7 @@ module.exports = {
   deleteVenta,
   filterVentasPaginated,
   updateVentaUsuarios,
+  getVentasByPacienteAndTipoMedicamento,
   validateCreate,
   validateUpdate,
   validateDelete,

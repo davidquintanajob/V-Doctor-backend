@@ -10,6 +10,9 @@ const jwt = require("jsonwebtoken");
 const fs = require('fs');
 const path = require('path');
 
+const http = require('http');
+const WebSocket = require('ws');
+
 const app = express();
 
 // ✅ AGREGAR ESTO: Configurar límite de tamaño para JSON (ej: 50MB)
@@ -33,14 +36,14 @@ app.use('/fotos', express.static(path.join(__dirname, 'fotos')));
 app.use((req, res, next) => {
   const startTime = Date.now();
   const userInfo = extractUserInfo(req); // ¡Cambiado a la nueva función!
-  
+
   const isLoginEndpoint = (req.originalUrl || req.url).includes('/Usuario/login');
-  
+
   // Interceptamos la respuesta para capturar el status code
   const originalSend = res.send;
-  res.send = function(body) {
+  res.send = function (body) {
     const responseTime = Date.now() - startTime;
-    
+
     const logData = {
       method: req.method,
       url: req.url,
@@ -50,7 +53,7 @@ app.use((req, res, next) => {
       ip: req.ip || req.connection.remoteAddress,
       userAgent: req.get('User-Agent')
     };
-    
+
     // Log para endpoint de login
     if (isLoginEndpoint) {
       logger.info({
@@ -66,26 +69,26 @@ app.use((req, res, next) => {
         logType: 'NORMAL'
       });
     }
-    
+
     // Log simplificado en consola
     const userDisplay = userInfo.nombre_usuario || 'No autenticado';
     const logLevel = isLoginEndpoint ? 'LOGIN' : 'INFO';
     console.log(`${new Date().toISOString()} - ${res.statusCode} - ${req.method} ${req.url} - User: ${userDisplay} - Level: ${logLevel}`);
-    
+
     return originalSend.call(this, body);
   };
-  
+
   next();
 });
 // Función para extraer información del usuario según el tipo de endpoint
 function extractUserInfo(req) {
   const isLoginEndpoint = (req.originalUrl || req.url).includes('/Usuario/login');
-  
+
   // Para endpoints de login, extraer información del body
   if (isLoginEndpoint && req.method === 'POST') {
     return extractUserInfoFromBody(req);
   }
-  
+
   // Para otros endpoints, extraer información del token
   return extractUserInfoFromToken(req);
 }
@@ -93,7 +96,7 @@ function extractUserInfo(req) {
 function extractUserInfoFromBody(req) {
   try {
     const { nombre_usuario, contrasenna } = req.body || {};
-    
+
     return {
       userId: null,
       nombre_usuario: nombre_usuario || 'No proporcionado',
@@ -101,7 +104,7 @@ function extractUserInfoFromBody(req) {
       contrasenna: contrasenna ? '*'.repeat(contrasenna.length) : 'No proporcionada',
       source: 'body'
     };
-    
+
   } catch (error) {
     return {
       userId: null,
@@ -117,12 +120,12 @@ function extractUserInfoFromBody(req) {
 function extractUserInfoFromToken(req) {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return { 
-        userId: null, 
-        nombre_usuario: null, 
-        rol: null, 
+      return {
+        userId: null,
+        nombre_usuario: null,
+        rol: null,
         error: 'No token provided',
         source: 'token'
       };
@@ -130,7 +133,7 @@ function extractUserInfoFromToken(req) {
 
     const token = authHeader.substring(7);
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     return {
       userId: decoded.userId,
       nombre_usuario: decoded.nombre_usuario,
@@ -138,7 +141,7 @@ function extractUserInfoFromToken(req) {
       tokenValid: true,
       source: 'token'
     };
-    
+
   } catch (error) {
     return {
       userId: null,
@@ -253,25 +256,25 @@ function setupRelations() {
   try {
     // Asegurarnos de que todos los modelos estén disponibles
     const models = {
-  Usuario,
-  Cliente,
-  Paciente,
-  Comerciable,
-  Tarea,
-  Entrada,
-  HistorialPeso,
-  Consulta,
-  Producto,
-  Servicio,
-  Medicamento,
-  HistorialTarea,
-  ServicioComplejo,
-  FotoConsulta,
-  Venta,
-  FotoServicioComplejo,
-  VentaUsuario,
-  Calendario, // se pone al final porque depende de ServicioComplejo
-};
+      Usuario,
+      Cliente,
+      Paciente,
+      Comerciable,
+      Tarea,
+      Entrada,
+      HistorialPeso,
+      Consulta,
+      Producto,
+      Servicio,
+      Medicamento,
+      HistorialTarea,
+      ServicioComplejo,
+      FotoConsulta,
+      Venta,
+      FotoServicioComplejo,
+      VentaUsuario,
+      Calendario, // se pone al final porque depende de ServicioComplejo
+    };
 
 
     // Iterar sobre los modelos y llamar a associate si existe
@@ -301,6 +304,7 @@ const ventaRoutes = require('./routes/ventaRoutes');
 const clientePacienteRoutes = require('./routes/clientePacienteRoutes');
 const pacienteRoutes = require('./routes/pacienteRoutes');
 const consultaRoutes = require('./routes/consultaRoutes');
+const speechToTextRoutes = require('./routes/speechToTextRoutes');
 app.use('/', usuarioRoutes);
 app.use('/', clienteRoutes);
 app.use('/', pacienteRoutes);
@@ -316,8 +320,11 @@ app.use('/', servicioComplejoRoutes);
 app.use('/', fotoServicioComplejoRoutes);
 app.use('/', fotoConsultaRoutes);
 app.use('/', ventaRoutes);
+app.use('/', speechToTextRoutes);
 
-// Iniciar servidor y sincronizar BD
+const server = http.createServer(app);
+
+// Reemplaza la función startApp() existente con este código:
 const startApp = async () => {
   try {
     // Crear directorio y archivo para cambio de moneda
@@ -343,13 +350,12 @@ const startApp = async () => {
         fs.mkdirSync(subcarpetaDir);
       }
     });
-    
+
     // Establecer relaciones antes de sincronizar
     setupRelations();
 
     // Sincronizar modelos con la base de datos en orden de dependencia
     await Usuario.sync();
-    // Asegurar que la columna `direccion` se cree/actualice en la tabla existente
     await Cliente.sync({ alter: true });
     await Paciente.sync({ alter: true });
     await Comerciable.sync();
@@ -372,13 +378,15 @@ const startApp = async () => {
     console.log("✅ Tablas sincronizadas correctamente");
 
     const PORT = process.env.PORT || 4000;
-    app.listen(PORT, () => {
+    // ✅ CORRECCIÓN: Usa el SERVER que ya tiene WebSocket, no app.listen()
+    // Y escucha en TODAS las interfaces de red (0.0.0.0)
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
       console.log(`📚 Documentación API: http://localhost:${PORT}/api-docs`);
     });
   } catch (error) {
     console.error("❌ Error crítico al iniciar la aplicación:", error);
-    process.exit(1); // Termina el proceso con código de error
+    process.exit(1);
   }
 };
 

@@ -88,11 +88,18 @@ const updateConsulta = async (id, consultaData) => {
 
 const deleteConsulta = async (id) => {
   const t = await sequelize.transaction();
+  let fotosAEliminar = [];
+
   try {
+    // 1. Buscar consulta con sus fotos
     const consulta = await Consulta.findOne({
       where: { id_consulta: id },
       include: [
-        { model: FotoConsulta, required: false }
+        {
+          model: FotoConsulta,
+          required: false,
+          attributes: ['id_foto_consulta', 'ruta']
+        }
       ],
       transaction: t
     });
@@ -102,24 +109,99 @@ const deleteConsulta = async (id) => {
       return false;
     }
 
-    // Eliminar fotos relacionadas primero
-    await FotoConsulta.destroy({ where: { id_consulta: id }, transaction: t });
+    console.log('Consulta encontrada con fotos:', {
+      id: consulta.id_consulta,
+      // VERIFICA cómo se llama la propiedad
+      tienePropiedadFotoConsulta: !!consulta.foto_consulta,
+      tienePropiedadFotoConsultas: !!consulta.foto_consultas,
+      fotoConsultaEsArray: Array.isArray(consulta.foto_consulta),
+      fotoConsultasEsArray: Array.isArray(consulta.foto_consultas)
+    });
 
-    // Luego eliminar la consulta
+    // 2. IMPORTANTE: Acceder a la propiedad CORRECTA
+    // Dependiendo de cómo Sequelize haya creado la relación
+
+    // Opción A: Si es 'foto_consulta' (singular)
+    if (consulta.foto_consulta && Array.isArray(consulta.foto_consulta)) {
+      fotosAEliminar = consulta.foto_consulta.map(foto => ({
+        id: foto.id_foto_consulta,
+        ruta: foto.ruta
+      }));
+    }
+    // Opción B: Si es 'foto_consultas' (plural)
+    else if (consulta.foto_consultas && Array.isArray(consulta.foto_consultas)) {
+      fotosAEliminar = consulta.foto_consultas.map(foto => ({
+        id: foto.id_foto_consulta,
+        ruta: foto.ruta
+      }));
+    }
+    // Opción C: Acceder directamente a dataValues
+    else if (consulta.dataValues && consulta.dataValues.foto_consulta) {
+      fotosAEliminar = consulta.dataValues.foto_consulta.map(foto => ({
+        id: foto.id_foto_consulta || foto.dataValues?.id_foto_consulta,
+        ruta: foto.ruta || foto.dataValues?.ruta
+      }));
+    }
+
+    console.log(`Fotos a eliminar: ${fotosAEliminar.length}`);
+    console.log('Rutas:', fotosAEliminar.map(f => f.ruta));
+
+    // 3. Eliminar fotos de la base de datos
+    await FotoConsulta.destroy({
+      where: { id_consulta: id },
+      transaction: t
+    });
+
+    // 4. Eliminar la consulta
     await consulta.destroy({ transaction: t });
 
+    // 5. Confirmar transacción
     await t.commit();
-    return true;
-  } catch (error) {
-    await t.rollback();
-    console.error('Error en servicio deleteConsulta:', error);
-    if (!error.errors || !Array.isArray(error.errors)) {
-      const err = new Error(error.message || 'Error interno al eliminar consulta');
-      err.errors = [error.message || 'Error interno al eliminar consulta'];
-      err.status = error.status || 500;
-      throw err;
+    console.log(`✅ Consulta ${id} eliminada de la base de datos`);
+
+    // 6. Eliminar archivos físicos
+    if (fotosAEliminar.length > 0) {
+      console.log(`🗑️ Eliminando ${fotosAEliminar.length} archivo(s) de imagen...`);
+
+      for (const foto of fotosAEliminar) {
+        if (!foto.ruta) continue;
+
+        try {
+          const rutaCompleta = path.join(__dirname, '..', foto.ruta);
+
+          // Verificar si existe antes de eliminar
+          try {
+            await fs.access(rutaCompleta);
+          } catch {
+            console.warn(`⚠️ Archivo no encontrado: ${foto.ruta}`);
+            continue;
+          }
+
+          await fs.unlink(rutaCompleta);
+          console.log(`✅ Archivo eliminado: ${foto.ruta}`);
+
+        } catch (fsError) {
+          console.error(`❌ Error al eliminar ${foto.ruta}:`, fsError.message);
+        }
+      }
     }
-    throw error;
+
+    return true;
+
+  } catch (error) {
+    if (t && !t.finished) {
+      try {
+        await t.rollback();
+      } catch (rollbackError) {
+        console.error('Error al revertir transacción:', rollbackError);
+      }
+    }
+
+    console.error('Error en deleteConsulta:', error);
+
+    const err = new Error(error.message || 'Error interno al eliminar consulta');
+    err.status = error.status || 500;
+    throw err;
   }
 };
 
@@ -170,8 +252,22 @@ const filterConsultasPaginated = async (filterCriteria, limit, offset) => {
 
     for (const key in filterCriteria) {
       if (Object.prototype.hasOwnProperty.call(filterCriteria, key)) {
-        if (filterCriteria[key] === undefined || filterCriteria[key] === null) continue;
-        whereClause[key] = { [Op.iLike]: `%${String(filterCriteria[key]).toLowerCase()}%` };
+        const val = filterCriteria[key];
+        if (val === undefined || val === null) continue;
+
+        // If the field is an ID (starts with 'id_') or the value is an integer, use exact match
+        if (/^id_/.test(key) || (typeof val === 'number') || (/^\d+$/.test(String(val)))) {
+          const intVal = parseInt(val);
+          if (!isNaN(intVal)) {
+            whereClause[key] = { [Op.eq]: intVal };
+          } else {
+            // fallback to exact string match if not a parsable int
+            whereClause[key] = { [Op.eq]: String(val) };
+          }
+        } else {
+          // Default: case-insensitive partial match for strings
+          whereClause[key] = { [Op.iLike]: `%${String(val).toLowerCase()}%` };
+        }
       }
     }
 
@@ -195,55 +291,136 @@ const filterConsultasPaginated = async (filterCriteria, limit, offset) => {
   }
 };
 
-// Crea consulta con lista de fotos en transacción
-const createConsultaWithPhotos = async (consultaData, fotosList) => {
+// Crea consulta con lista de fotos (transaccional)
+const createConsultaWithPhotos = async (consultaData, fotos) => {
   const t = await sequelize.transaction();
+  let consultaCreada = null;
+  let imagenesGuardadas = []; // Para limpieza en caso de error
+
   try {
-    // Crear consulta
-    const newConsulta = await Consulta.create(consultaData, { transaction: t });
+    consultaCreada = await Consulta.create(consultaData, { transaction: t });
 
-    const FOTOS_CARPETA_CONSULTA = process.env.FOTOS_CARPETA_CONSULTA || '/fotos/consulta';
+    const idConsulta = consultaCreada.id_consulta;
 
-    // Procesar y crear cada foto
-    for (let i = 0; i < fotosList.length; i++) {
-      const foto = fotosList[i];
-      const imagenBase64 = foto.imagen;
+    const FOTOS_CARPETA_CONSULTA = process.env.FOTOS_CARPETA_CONSULTA || 'fotos/consulta';
+    const folderPath = path.join(__dirname, '..', FOTOS_CARPETA_CONSULTA);
 
-      if (!imagenBase64) continue; // Si no hay imagen, continuar
+    // Crear carpeta si no existe
+    await fs.mkdir(folderPath, { recursive: true });
 
-      // Crear el nombre del archivo: {id_consulta}-{indice}
-      const nombreArchivo = `${newConsulta.id_consulta}-${i + 1}`;
-      const rutaCompleta = path.join(FOTOS_CARPETA_CONSULTA, nombreArchivo);
+    // 2. PROCESAR CADA FOTO EN LA MISMA TRANSACCIÓN
+    for (let i = 0; i < fotos.length; i++) {
+      const foto = fotos[i];
+      const index = i + 1;
 
-      // Guardar la imagen en el filesystem
-      await fs.writeFile(path.join(__dirname, '..', rutaCompleta), imagenBase64, 'base64');
+      // Validar imagen
+      if (!foto.imagen || typeof foto.imagen !== 'string') {
+        throw new Error(`La foto ${index} no tiene una imagen válida`);
+      }
 
-      // Crear registro en FotoConsulta con la ruta
-      await FotoConsulta.create(
-        {
-          ruta: rutaCompleta,
+      // Procesar base64
+      let base64Data = foto.imagen;
+      if (base64Data.includes('base64,')) {
+        base64Data = base64Data.split('base64,')[1];
+      }
+
+      // Validar que sea base64 válido
+      if (!base64Data || base64Data.trim() === '') {
+        throw new Error(`La foto ${index} tiene un formato Base64 inválido`);
+      }
+
+      // Nombre de archivo
+      const nombreArchivo = `${idConsulta}-${index}.jpg`;
+      const rutaCompleta = path.join(folderPath, nombreArchivo);
+      const rutaParaBD = path.join(FOTOS_CARPETA_CONSULTA, nombreArchivo);
+
+      // 3. GUARDAR IMAGEN EN DISCO (fuera de transacción BD, pero monitoreamos)
+      try {
+        await fs.writeFile(rutaCompleta, base64Data, 'base64');
+        imagenesGuardadas.push(rutaCompleta); // Registrar para posible limpieza
+      } catch (fsError) {
+        throw new Error(`Error al guardar imagen ${index}: ${fsError.message}`);
+      }
+
+      // 4. CREAR REGISTRO DE FOTO EN TRANSACCIÓN
+      try {
+        await FotoConsulta.create({
+          ruta: rutaParaBD.replace(/\\/g, '/'),
           nota: foto.nota || null,
-          id_consulta: newConsulta.id_consulta
-        },
-        { transaction: t }
-      );
+          id_consulta: idConsulta
+        }, { transaction: t });
+      } catch (dbError) {
+        throw new Error(`Error al crear registro de foto ${index}: ${dbError.message}`);
+      }
     }
 
     await t.commit();
 
-    // Cargar consulta con relaciones para retorno
-    const consultaWithRelations = await getConsultaById(newConsulta.id_consulta);
-    return consultaWithRelations;
+    // 6. OBTENER CONSULTA COMPLETA CON RELACIONES
+    const consultaCompleta = await Consulta.findOne({
+      where: { id_consulta: idConsulta },
+      include: [
+        { model: Paciente },
+        { model: Usuario },
+        { model: FotoConsulta }
+      ]
+    });
+
+    return consultaCompleta;
+
   } catch (error) {
-    await t.rollback();
-    console.error('Error en servicio createConsultaWithPhotos:', error);
-    if (!error.errors || !Array.isArray(error.errors)) {
-      const err = new Error(error.message || 'Error interno al crear consulta con fotos');
-      err.errors = [error.message || 'Error interno al crear consulta con fotos'];
-      err.status = error.status || 500;
-      throw err;
+    console.error('❌ ERROR DETECTADO EN TRANSACCIÓN:', error.message);
+
+    // A. PRIMERO: REVERTIR TRANSACCIÓN DE BD (si sigue activa)
+    if (t && !t.finished) {
+      try {
+        await t.rollback();
+      } catch (rollbackError) {
+        console.error('⚠️ Error al revertir transacción BD:', rollbackError.message);
+      }
     }
-    throw error;
+
+    // B. SEGUNDO: LIMPIAR IMÁGENES GUARDADAS EN DISCO
+    if (imagenesGuardadas.length > 0) {
+      for (const imagenPath of imagenesGuardadas) {
+        try {
+          await fs.unlink(imagenPath);
+        } catch (unlinkError) {
+          console.warn(`⚠️ No se pudo eliminar imagen ${imagenPath}:`, unlinkError.message);
+        }
+      }
+    }
+
+    // C. TERCERO: SI LA CONSULTA SE CREÓ PERO LA TRANSACCIÓN FALLÓ, ELIMINARLA
+    if (consultaCreada && t && t.finished === 'rolled back') {
+      try {
+        // Buscar si aún existe (puede que el rollback ya la haya eliminado)
+        const consultaExistente = await Consulta.findByPk(consultaCreada.id_consulta);
+        if (consultaExistente) {
+          await consultaExistente.destroy();
+        }
+      } catch (deleteError) {
+        console.warn('⚠️ No se pudo eliminar consulta huérfana:', deleteError.message);
+      }
+    }
+
+    // D. PROPAGAR ERROR CON INFORMACIÓN CLARA
+    console.error('Error completo:', {
+      name: error.name,
+      message: error.message,
+      status: error.status || 500
+    });
+
+    const status = error.status ||
+      (error.name === 'SequelizeForeignKeyConstraintError' ? 400 :
+        error.name === 'SequelizeValidationError' ? 400 : 500);
+
+    const err = new Error(error.message || 'Error al crear consulta con fotos');
+    err.errors = [error.message];
+    err.status = status;
+    err.name = error.name;
+
+    throw err;
   }
 };
 

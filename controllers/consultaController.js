@@ -129,6 +129,7 @@ const createConsultaWithPhotos = async (req, res) => {
     const { fecha, motivo, diagnostico, anamnesis, tratamiento, patologia, id_paciente, id_usuario, fotos } = req.body;
     const errors = [];
 
+    // Validaciones básicas
     if (!fecha) errors.push('fecha es requerida');
     if (!motivo) errors.push('motivo es requerido');
     if (!anamnesis) errors.push('anamnesis es requerida');
@@ -138,40 +139,107 @@ const createConsultaWithPhotos = async (req, res) => {
     if (id_usuario && isNaN(parseInt(id_usuario, 10))) errors.push('id_usuario debe ser un número válido');
     if (!Array.isArray(fotos)) errors.push('fotos debe ser una lista');
 
-    if (errors.length) return res.status(400).json({ errors });
+    // Si hay errores de validación, devolver 400 inmediatamente
+    if (errors.length > 0) {
+      return res.status(400).json({ 
+        success: false,
+        errors 
+      });
+    }
 
-    // Validar que cada foto tenga una imagen
+    // Validar que cada foto tenga imagen
     const fotoErrors = [];
     const validFotos = [];
+    
     for (let i = 0; i < fotos.length; i++) {
       const foto = fotos[i];
-      if (!foto.imagen) {
+      
+      if (!foto.imagen || typeof foto.imagen !== 'string') {
         fotoErrors.push(`Foto #${i + 1}: imagen es requerida (formato Base64)`);
       } else {
-        validFotos.push(foto);
+        // Validar formato base64 básico
+        if (foto.imagen.trim().length < 100 && !foto.imagen.includes('base64')) {
+          fotoErrors.push(`Foto #${i + 1}: la imagen no parece estar en formato Base64 válido`);
+        } else {
+          validFotos.push(foto);
+        }
       }
     }
 
-    if (fotoErrors.length) return res.status(400).json({ errors: fotoErrors });
+    if (fotoErrors.length > 0) {
+      return res.status(400).json({ 
+        success: false,
+        errors: fotoErrors 
+      });
+    }
 
+    // Preparar datos para el servicio
     const consultaData = {
       fecha,
       motivo,
-      diagnostico,
+      diagnostico: diagnostico || null,
       anamnesis,
-      tratamiento,
-      patologia,
-      id_paciente,
-      id_usuario
+      tratamiento: tratamiento || null,
+      patologia: patologia || null,
+      id_paciente: parseInt(id_paciente, 10),
+      id_usuario: parseInt(id_usuario, 10)
     };
 
+    // Llamar al servicio
     const created = await consultaService.createConsultaWithPhotos(consultaData, validFotos);
-    res.status(201).json(created);
+    
+    // Éxito
+    res.status(201).json({
+      success: true,
+      message: 'Consulta creada exitosamente con fotos',
+      data: created
+    });
+    
   } catch (error) {
     console.error('Error en createConsultaWithPhotos controller:', error);
-    const status = error.status || 500;
-    const errs = error.errors && Array.isArray(error.errors) ? error.errors : [error.message || 'Error al crear consulta con fotos'];
-    res.status(status).json({ errors: errs });
+    
+    // Determinar código de estado
+    let statusCode = 500;
+    let errorMessage = 'Error interno del servidor';
+    let errorDetails = [];
+    
+    // Manejar errores específicos
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+      statusCode = 400;
+      errorMessage = 'Error de referencia: El paciente o usuario especificado no existe';
+      errorDetails = [error.message || 'Clave foránea no válida'];
+      
+    } else if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
+      statusCode = 400;
+      errorMessage = 'Error de validación';
+      errorDetails = error.errors ? error.errors.map(e => e.message) : [error.message];
+      
+    } else if (error.status && error.status >= 400 && error.status < 500) {
+      // Usar el estado del error si es 4xx
+      statusCode = error.status;
+      errorMessage = error.message || 'Error en la solicitud';
+      errorDetails = error.errors || [error.message];
+      
+    } else {
+      // Error interno (5xx)
+      errorMessage = 'Error interno al procesar la solicitud';
+      errorDetails = ['Por favor, intente nuevamente más tarde'];
+      console.error('Error interno no manejado:', error);
+    }
+
+    // En desarrollo, incluir más detalles
+    if (process.env.NODE_ENV === 'development') {
+      errorDetails.push(`Tipo: ${error.name || 'Desconocido'}`);
+      if (error.stack) {
+        errorDetails.push(`Stack: ${error.stack.split('\n')[0]}`);
+      }
+    }
+
+    res.status(statusCode).json({
+      success: false,
+      message: errorMessage,
+      errors: errorDetails
+    });
   }
 };
 

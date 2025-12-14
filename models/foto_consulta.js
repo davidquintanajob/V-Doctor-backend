@@ -28,7 +28,10 @@ const FotoConsulta = sequelize.define("foto_consulta", {
 });
 
 FotoConsulta.associate = function (models) {
-  FotoConsulta.belongsTo(models.Consulta, { foreignKey: 'id_consulta' });
+  FotoConsulta.belongsTo(models.Consulta, { 
+  foreignKey: 'id_consulta',
+  onDelete: 'CASCADE'
+});
 };
 
 module.exports = { FotoConsulta };

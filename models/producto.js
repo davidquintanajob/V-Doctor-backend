@@ -37,7 +37,7 @@ const Producto = sequelize.define("producto", {
     allowNull: true,
   },
   codigo: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.BIGINT,
     allowNull: false,
     unique: true,
   },

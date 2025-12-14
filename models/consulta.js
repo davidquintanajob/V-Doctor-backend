@@ -55,7 +55,10 @@ Consulta.associate = function (models) {
   Consulta.belongsTo(models.Paciente, { foreignKey: 'id_paciente' });
   Consulta.belongsTo(models.Usuario, { foreignKey: 'id_usuario' });
   Consulta.hasMany(models.Venta, { foreignKey: 'id_consulta' });
-  Consulta.hasMany(models.FotoConsulta, { foreignKey: 'id_consulta' });
+  Consulta.hasMany(models.FotoConsulta, { 
+  foreignKey: 'id_consulta',
+  onDelete: 'CASCADE' // Importante para consistencia
+});
 };
 
 module.exports = { Consulta };

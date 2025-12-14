@@ -74,7 +74,7 @@ const Venta = sequelize.define("venta", {
     type: DataTypes.INTEGER,
     allowNull: true,
     references: {
-      model: 'consultas',
+      model: 'consulta',
       key: 'id_consulta'
     }
   },

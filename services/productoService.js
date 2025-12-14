@@ -230,7 +230,10 @@ const filterProductosPaginated = async (filterCriteria, limit, offset) => {
             whereClauseProducto.categoria = { [Op.iLike]: `%${filterCriteria[key]}%` };
             break;
           case 'codigo':
-            whereClauseProducto.codigo = { [Op.eq]: filterCriteria[key] };
+            // Ignorar si está vacío o no contiene solo números
+            if (filterCriteria[key] && /^\d+$/.test(filterCriteria[key])) {
+              whereClauseProducto.codigo = { [Op.eq]: filterCriteria[key] };
+            }
             break;
           case 'costo_usd_min':
             whereClauseProducto.costo_usd = { ...whereClauseProducto.costo_usd, [Op.gte]: filterCriteria[key] };

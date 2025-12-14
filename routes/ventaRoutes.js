@@ -408,4 +408,35 @@ router.post('/venta/Filter/:limit/:page', authenticate(), ventaController.filter
  */
 router.put('/venta/:id/usuarios', authenticate(), ventaController.updateVentaUsuarios);
 
+/**
+ * @swagger
+ * /venta/medicamentoPaciente/{paciente}/{tipo_medicamento}:
+ *   get:
+ *     summary: Obtiene las ventas de un paciente donde el comerciable es un producto y su medicamento tiene el tipo indicado.
+ *     tags: [Venta]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: paciente
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID del paciente
+ *       - in: path
+ *         name: tipo_medicamento
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Tipo de medicamento (debe coincidir con los tipos definidos en el modelo `Medicamento`)
+ *     responses:
+ *       200:
+ *         description: Lista de ventas que coinciden
+ *       400:
+ *         description: Tipo de medicamento inválido
+ *       404:
+ *         description: Paciente no encontrado
+ */
+router.get('/venta/medicamentoPaciente/:paciente/:tipo_medicamento', authenticate(), ventaController.getVentasMedicamentoPaciente);
+
 module.exports = router;

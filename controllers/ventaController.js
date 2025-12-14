@@ -1,4 +1,6 @@
 const ventaService = require('../services/ventaService');
+const { tiposMedicamento } = require('../models/medicamento');
+const { Paciente } = require('../models/paciente');
 
 const getAllVentas = async (req, res) => {
   try {
@@ -127,6 +129,29 @@ const updateVentaUsuarios = async (req, res) => {
   }
 };
 
+const getVentasMedicamentoPaciente = async (req, res) => {
+  try {
+    const pacienteId = req.params.paciente;
+    const tipo = req.params.tipo_medicamento;
+
+    // Validar tipo de medicamento usando los tipos definidos en el modelo
+    if (!tiposMedicamento.includes(tipo)) {
+      return res.status(400).json({ errors: [`Tipo de medicamento inválido. Opciones: ${tiposMedicamento.join(', ')}`] });
+    }
+
+    // Validar que el paciente exista
+    const paciente = await Paciente.findByPk(pacienteId);
+    if (!paciente) return res.status(404).json({ errors: ['Paciente no encontrado'] });
+
+    // Obtener ventas que estén relacionadas a una consulta cuyo paciente sea el indicado
+    // y cuyo comerciable sea un producto que tenga un medicamento con el tipo solicitado
+    const ventas = await ventaService.getVentasByPacienteAndTipoMedicamento(pacienteId, tipo);
+    res.json(ventas);
+  } catch (error) {
+    res.status(500).json({ errors: [error.message] });
+  }
+};
+
 module.exports = {
   getAllVentas,
   getVentaById,
@@ -136,4 +161,5 @@ module.exports = {
   deleteVenta,
   filterVentas,
   updateVentaUsuarios,
+  getVentasMedicamentoPaciente,
 };
