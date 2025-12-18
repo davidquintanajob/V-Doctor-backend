@@ -2,10 +2,16 @@ const { Consulta } = require('../models/consulta');
 const { Paciente } = require('../models/paciente');
 const { Usuario } = require('../models/usuario');
 const { FotoConsulta } = require('../models/foto_consulta');
+const { Venta } = require("../models/venta")
 const sequelize = require('../helpers/database');
 const { Op } = require('sequelize');
 const fs = require('fs').promises;
 const path = require('path');
+const { Comerciable } = require('../models/comerciable');
+const { Producto } = require('../models/producto');
+const { Medicamento } = require('../models/medicamento');
+const { Servicio } = require("../models/servicio");
+const { ServicioComplejo } = require("../models/servicio_complejo");
 
 const getAllConsultas = async () => {
   try {
@@ -108,17 +114,6 @@ const deleteConsulta = async (id) => {
       await t.rollback();
       return false;
     }
-
-    console.log('Consulta encontrada con fotos:', {
-      id: consulta.id_consulta,
-      // VERIFICA cómo se llama la propiedad
-      tienePropiedadFotoConsulta: !!consulta.foto_consulta,
-      tienePropiedadFotoConsultas: !!consulta.foto_consultas,
-      fotoConsultaEsArray: Array.isArray(consulta.foto_consulta),
-      fotoConsultasEsArray: Array.isArray(consulta.foto_consultas)
-    });
-
-    // 2. IMPORTANTE: Acceder a la propiedad CORRECTA
     // Dependiendo de cómo Sequelize haya creado la relación
 
     // Opción A: Si es 'foto_consulta' (singular)
@@ -143,9 +138,6 @@ const deleteConsulta = async (id) => {
       }));
     }
 
-    console.log(`Fotos a eliminar: ${fotosAEliminar.length}`);
-    console.log('Rutas:', fotosAEliminar.map(f => f.ruta));
-
     // 3. Eliminar fotos de la base de datos
     await FotoConsulta.destroy({
       where: { id_consulta: id },
@@ -157,11 +149,9 @@ const deleteConsulta = async (id) => {
 
     // 5. Confirmar transacción
     await t.commit();
-    console.log(`✅ Consulta ${id} eliminada de la base de datos`);
 
     // 6. Eliminar archivos físicos
     if (fotosAEliminar.length > 0) {
-      console.log(`🗑️ Eliminando ${fotosAEliminar.length} archivo(s) de imagen...`);
 
       for (const foto of fotosAEliminar) {
         if (!foto.ruta) continue;
@@ -178,7 +168,6 @@ const deleteConsulta = async (id) => {
           }
 
           await fs.unlink(rutaCompleta);
-          console.log(`✅ Archivo eliminado: ${foto.ruta}`);
 
         } catch (fsError) {
           console.error(`❌ Error al eliminar ${foto.ruta}:`, fsError.message);
@@ -211,7 +200,40 @@ const filterConsultasPaginated = async (filterCriteria, limit, offset) => {
     const include = [
       { model: Paciente, required: false },
       { model: FotoConsulta, required: false },
-      { model: Usuario, required: false }
+      { model: Usuario, required: false },
+      {
+        model: Venta,
+        required: false,
+        include: [
+          {
+            model: Comerciable,
+            required: false,
+            include: [
+              {
+                model: Servicio,
+                required: false,
+                as: 'servicio' // Asegúrate de que este alias coincida con tu definición
+              },
+              {
+                model: Producto,
+                required: false,
+                include: [
+                  {
+                    model: Medicamento,
+                    required: false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            model: ServicioComplejo,
+            required: false,
+            foreignKey: 'id_servicio_complejo',
+            targetKey: 'id_comerciable'
+          }
+        ]
+      }
     ];
 
     // Filtro por rango de fecha
@@ -276,7 +298,8 @@ const filterConsultasPaginated = async (filterCriteria, limit, offset) => {
       limit,
       offset,
       include,
-      distinct: true
+      distinct: true,
+      order: [['createdAt', 'DESC']]
     });
     return result;
   } catch (error) {

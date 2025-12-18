@@ -6,6 +6,9 @@ logs
 *.log
 npm-debug.log*
 
+# Carpeta de fotos que sirve la api
+fotos/
+
 # Environment variables
 .env
 
