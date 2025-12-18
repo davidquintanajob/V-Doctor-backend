@@ -7,6 +7,8 @@ const { Tarea } = require("../models/tarea");
 const { Calendario } = require("../models/calendario");
 const { VentaUsuario } = require("../models/venta_usuario");
 const { Op } = require('sequelize');
+const fs = require('fs').promises;
+const path = require('path');
 
 // Helper: agrega totalFactura (servicios + productos + cargoAdicional)
 const mapUsuarioWithFacturaTotals = (usuarioInstance) => {
@@ -105,7 +107,21 @@ const usuarioExistsByCarnet = async (carnet_identidad) => {
  */
 const createUsuario = async (usuarioData) => {
   try {
-    return await Usuario.create(usuarioData);
+    // Extraer imagen (base64) si viene en la petición y evitar que se guarde como campo directo
+    const imagenBase64 = usuarioData.imagen;
+    if (imagenBase64) delete usuarioData.imagen;
+
+    const newUsuario = await Usuario.create(usuarioData);
+
+    // Si se envió imagen, guardarla en disco y actualizar `foto_firma`
+    if (imagenBase64) {
+      const FOTOS_CARPETA_USUARIOFIRMA = process.env.FOTOS_CARPETA_USUARIOFIRMA || '/fotos/usuariofirma';
+      const imagePath = path.join(FOTOS_CARPETA_USUARIOFIRMA, `${newUsuario.id_usuario}.jpg`);
+      await fs.writeFile(path.join(__dirname, '..', imagePath), imagenBase64, 'base64');
+      await newUsuario.update({ foto_firma: imagePath });
+    }
+
+    return newUsuario;
   } catch (error) {
     console.log("Error al en el servicio de crear usuario: ", error);
     if (!error.errors || !Array.isArray(error.errors)) {
@@ -125,7 +141,19 @@ const updateUsuario = async (id, userData) => {
   try {
     const usuario = await Usuario.findOne({ where: { id_usuario: id } });
     if (usuario) {
+      // Manejar imagen (base64) si viene
+      const imagenBase64 = userData.imagen;
+      if (imagenBase64) delete userData.imagen;
+
       await usuario.update(userData);
+
+      if (imagenBase64) {
+        const FOTOS_CARPETA_USUARIOFIRMA = process.env.FOTOS_CARPETA_USUARIOFIRMA || '/fotos/usuariofirma';
+        const imagePath = path.join(FOTOS_CARPETA_USUARIOFIRMA, `${usuario.id_usuario}.jpg`);
+        await fs.writeFile(path.join(__dirname, '..', imagePath), imagenBase64, 'base64');
+        await usuario.update({ foto_firma: imagePath });
+      }
+
       return usuario;
     }
     return null;
@@ -170,6 +198,19 @@ const deleteUsuario = async (id) => {
       const error = new Error(`No se puede eliminar el usuario porque está asociado con ${associations.join(', ')}.`);
       error.status = 400;
       throw error;
+    }
+
+    // Si tiene foto_firma en disco, intentar eliminarla
+    if (usuario.foto_firma) {
+      try {
+        const fullPath = path.join(__dirname, '..', usuario.foto_firma);
+        await fs.access(fullPath);
+        await fs.unlink(fullPath);
+        console.log(`✅ Foto firma eliminada: ${usuario.foto_firma}`);
+      } catch (fileError) {
+        console.warn(`⚠️ No se pudo eliminar la foto firma: ${usuario.foto_firma}`, fileError.message);
+        // continuar con la eliminación del usuario aunque falle la eliminación del archivo
+      }
     }
 
     await usuario.destroy();

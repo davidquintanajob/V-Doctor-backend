@@ -355,7 +355,8 @@ const startApp = async () => {
     setupRelations();
 
     // Sincronizar modelos con la base de datos en orden de dependencia
-    await Usuario.sync();
+    // Usar `alter: true` para aplicar cambios no destructivos en el esquema del modelo
+    await Usuario.sync({ alter: true });
     await Cliente.sync({ alter: true });
     await Paciente.sync({ alter: true });
     await Comerciable.sync();

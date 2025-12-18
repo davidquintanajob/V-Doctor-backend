@@ -27,6 +27,11 @@ const Usuario = sequelize.define("usuario", {
     allowNull: false,
     defaultValue: 0.00,
   },
+  foto_firma: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: null,
+  },
   rol: {
     type: DataTypes.STRING,
     allowNull: false,

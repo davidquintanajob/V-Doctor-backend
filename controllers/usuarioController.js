@@ -27,7 +27,7 @@ const getUsuarioById = async (req, res) => {
 };
 
 const createUsuario = async (req, res) => {
-    const { nombre_natural, nombre_usuario, contrasenna, rol, salario_diario, activo } = req.body;
+    const { nombre_natural, nombre_usuario, contrasenna, rol, salario_diario, activo, imagen } = req.body;
     const errors = [];
 
     // Validar campos requeridos
@@ -94,7 +94,8 @@ const createUsuario = async (req, res) => {
         contrasenna: hashedPassword,
         rol: rol,
         activo: activo !== undefined ? activo : true,
-        salario_diario: salario_diario || 0
+        salario_diario: salario_diario || 0,
+        imagen
     };
     try {
         const newUsuario = await usuarioService.createUsuario(usuarioData);
@@ -121,7 +122,7 @@ const createUsuario = async (req, res) => {
 const updateUsuario = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nombre_natural, nombre_usuario, contrasenna, rol, salario_diario, activo } = req.body;
+        const { nombre_natural, nombre_usuario, contrasenna, rol, salario_diario, activo, imagen } = req.body;
         const errors = [];
 
         // Validar que al menos un campo esté presente
@@ -189,6 +190,7 @@ const updateUsuario = async (req, res) => {
         if (rol) userData.rol = rol;
         if (salario_diario) userData.salario_diario = salario_diario;
         if (activo !== undefined) userData.activo = activo;
+        if (imagen) userData.imagen = imagen;
         if (contrasenna) {
             const hashedPassword = await bcrypt.hash(contrasenna, 10);
             userData.contrasenna = hashedPassword;
