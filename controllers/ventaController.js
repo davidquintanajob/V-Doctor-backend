@@ -40,6 +40,25 @@ const validateVenta = async (req, res) => {
   }
 };
 
+const validateUpdate = async (req, res) => {
+  try {
+    const validation = await ventaService.validateUpdate(req.params.id, req.body);
+    if (validation.valid) {
+      return res.status(200).json({
+        message: 'La venta puede ser actualizada sin problemas',
+        valid: true
+      });
+    }
+    res.status(400).json({
+      message: 'Hay errores que impiden la actualización de la venta',
+      valid: false,
+      errors: validation.errors
+    });
+  } catch (error) {
+    res.status(500).json({ errors: [error.message] });
+  }
+};
+
 const createVenta = async (req, res) => {
   try {
     // Validar primero
@@ -156,6 +175,7 @@ module.exports = {
   getAllVentas,
   getVentaById,
   validateVenta,
+  validateUpdate,
   createVenta,
   updateVenta,
   deleteVenta,

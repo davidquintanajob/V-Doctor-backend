@@ -243,6 +243,86 @@ const createConsultaWithPhotos = async (req, res) => {
   }
 };
 
+// Actualizar consulta y reemplazar fotos (transaccional en servicio)
+const updateConsultaWithPhotos = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { fecha, motivo, diagnostico, anamnesis, tratamiento, patologia, id_paciente, id_usuario, fotos } = req.body;
+    const errors = [];
+
+    if (!id) errors.push('id es requerido en la ruta');
+    if (id_paciente && isNaN(parseInt(id_paciente, 10))) errors.push('id_paciente debe ser un número válido');
+    if (id_usuario && isNaN(parseInt(id_usuario, 10))) errors.push('id_usuario debe ser un número válido');
+
+    // fotos es opcional para el update; si viene, debe ser arreglo
+    if (fotos !== undefined && !Array.isArray(fotos)) errors.push('fotos debe ser una lista');
+
+    if (Array.isArray(fotos)) {
+      const fotoErrors = [];
+      for (let i = 0; i < fotos.length; i++) {
+        const foto = fotos[i];
+        if (!foto || !foto.imagen || typeof foto.imagen !== 'string') {
+          fotoErrors.push(`Foto #${i + 1}: imagen es requerida (formato Base64)`);
+        } else {
+          if (foto.imagen.trim().length < 100 && !foto.imagen.includes('base64')) {
+            fotoErrors.push(`Foto #${i + 1}: la imagen no parece estar en formato Base64 válido`);
+          }
+        }
+      }
+      if (fotoErrors.length > 0) errors.push(...fotoErrors);
+    }
+
+    if (errors.length > 0) return res.status(400).json({ success: false, errors });
+
+    const consultaData = {
+      fecha,
+      motivo,
+      diagnostico: diagnostico || null,
+      anamnesis,
+      tratamiento: tratamiento || null,
+      patologia: patologia || null,
+      id_paciente: id_paciente !== undefined ? (id_paciente !== null ? parseInt(id_paciente, 10) : null) : undefined,
+      id_usuario: id_usuario !== undefined ? (id_usuario !== null ? parseInt(id_usuario, 10) : null) : undefined
+    };
+
+    const updated = await consultaService.updateConsultaWithPhotos(id, consultaData, Array.isArray(fotos) ? fotos : null);
+
+    if (!updated) return res.status(404).json({ success: false, error: 'Consulta no encontrada' });
+
+    res.status(200).json({ success: true, message: 'Consulta actualizada correctamente', data: updated });
+  } catch (error) {
+    console.error('Error en updateConsultaWithPhotos controller:', error);
+    let statusCode = 500;
+    let errorMessage = 'Error interno del servidor';
+    let errorDetails = [];
+
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+      statusCode = 400;
+      errorMessage = 'Error de referencia: El paciente o usuario especificado no existe';
+      errorDetails = [error.message || 'Clave foránea no válida'];
+    } else if (error.name === 'SequelizeValidationError' || error.name === 'SequelizeUniqueConstraintError') {
+      statusCode = 400;
+      errorMessage = 'Error de validación';
+      errorDetails = error.errors ? error.errors.map(e => e.message) : [error.message];
+    } else if (error.status && error.status >= 400 && error.status < 500) {
+      statusCode = error.status;
+      errorMessage = error.message || 'Error en la solicitud';
+      errorDetails = error.errors || [error.message];
+    } else {
+      errorMessage = 'Error interno al procesar la solicitud';
+      errorDetails = ['Por favor, intente nuevamente más tarde'];
+      console.error('Error interno no manejado:', error);
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      errorDetails.push(`Tipo: ${error.name || 'Desconocido'}`);
+      if (error.stack) errorDetails.push(`Stack: ${error.stack.split('\n')[0]}`);
+    }
+
+    res.status(statusCode).json({ success: false, message: errorMessage, errors: errorDetails });
+  }
+};
+
 module.exports = {
   getAllConsultas,
   getConsultaById,
@@ -250,5 +330,6 @@ module.exports = {
   updateConsulta,
   deleteConsulta,
   filterConsultas,
-  createConsultaWithPhotos
+  createConsultaWithPhotos,
+  updateConsultaWithPhotos
 };

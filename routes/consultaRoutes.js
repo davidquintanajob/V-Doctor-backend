@@ -382,4 +382,64 @@ router.post('/consulta/Filter/:limit/:page', authenticate(), consultaController.
  */
 router.post('/consulta/CreateWithPhotos', authenticate(), consultaController.createConsultaWithPhotos);
 
+/**
+ * @swagger
+ * /consulta/UpdateWithPhotos/{id}:
+ *   put:
+ *     summary: Actualizar una consulta y reemplazar sus fotos
+ *     tags: [Consultas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID de la consulta a actualizar
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fecha:
+ *                 type: string
+ *                 format: date-time
+ *               motivo:
+ *                 type: string
+ *               diagnostico:
+ *                 type: string
+ *               anamnesis:
+ *                 type: string
+ *               tratamiento:
+ *                 type: string
+ *               patologia:
+ *                 type: string
+ *               id_paciente:
+ *                 type: integer
+ *               id_usuario:
+ *                 type: integer
+ *               fotos:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     imagen:
+ *                       type: string
+ *                       description: Base64 encoded image
+ *                     nota:
+ *                       type: string
+ *     responses:
+ *       200:
+ *         description: Consulta actualizada exitosamente. Si se pasaron fotos, las antiguas se reemplazan por las nuevas.
+ *       400:
+ *         description: Datos inválidos
+ *       404:
+ *         description: Consulta no encontrada
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.put('/consulta/UpdateWithPhotos/:id', authenticate(), consultaController.updateConsultaWithPhotos);
 module.exports = router;

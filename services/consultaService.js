@@ -212,7 +212,7 @@ const filterConsultasPaginated = async (filterCriteria, limit, offset) => {
               {
                 model: Servicio,
                 required: false,
-                as: 'servicio' // Asegúrate de que este alias coincida con tu definición
+                as: 'servicio'
               },
               {
                 model: Producto,
@@ -231,6 +231,14 @@ const filterConsultasPaginated = async (filterCriteria, limit, offset) => {
             required: false,
             foreignKey: 'id_servicio_complejo',
             targetKey: 'id_comerciable'
+          },
+          // Agregar esta sección para incluir los usuarios relacionados
+          {
+            model: Usuario,
+            required: false,
+            through: { attributes: [] } // Para excluir los datos de la tabla intermedia
+            // Si necesitas datos específicos de la relación, puedes especificarlos:
+            // through: { attributes: ['campo1', 'campo2'] }
           }
         ]
       }
@@ -447,6 +455,136 @@ const createConsultaWithPhotos = async (consultaData, fotos) => {
   }
 };
 
+// Actualiza una consulta y, si se envían fotos, reemplaza todas las fotos existentes
+const updateConsultaWithPhotos = async (id, consultaData, fotos) => {
+  const t = await sequelize.transaction();
+  const imagenesGuardadas = [];
+  let existingFotos = [];
+
+  try {
+    // 1. Buscar la consulta
+    const consulta = await Consulta.findOne({ where: { id_consulta: id }, include: [{ model: FotoConsulta }], transaction: t, lock: t.LOCK && t.LOCK.UPDATE });
+    if (!consulta) {
+      await t.rollback();
+      return null;
+    }
+
+    // Mantener listado de fotos actuales para borrado físico posterior
+    existingFotos = Array.isArray(consulta.foto_consultas) ? consulta.foto_consultas.map(f => f.ruta) : (consulta.FotoConsultas ? consulta.FotoConsultas.map(f => f.ruta) : []);
+
+    // 2. Actualizar campos de la consulta dentro de la transacción
+    await consulta.update(consultaData, { transaction: t });
+
+    const FOTOS_CARPETA_CONSULTA = process.env.FOTOS_CARPETA_CONSULTA || 'fotos/consulta';
+    const folderPath = path.join(__dirname, '..', FOTOS_CARPETA_CONSULTA);
+
+    // Si no vienen fotos, solo actualizamos la consulta
+    if (!fotos || !Array.isArray(fotos) || fotos.length === 0) {
+      await t.commit();
+      return await getConsultaById(consulta.id_consulta);
+    }
+
+    // 3. Eliminar registros antiguos de fotos en BD (dentro de la transacción)
+    await FotoConsulta.destroy({ where: { id_consulta: id }, transaction: t });
+
+    // 4. Asegurar carpeta de fotos
+    await fs.mkdir(folderPath, { recursive: true });
+
+    // 5. Procesar y guardar cada nueva foto (escribir en disco y crear registro en BD)
+    for (let i = 0; i < fotos.length; i++) {
+      const foto = fotos[i];
+      const index = i + 1;
+
+      if (!foto || !foto.imagen || typeof foto.imagen !== 'string') {
+        const err = new Error(`Foto #${index}: imagen es requerida`);
+        err.status = 400;
+        throw err;
+      }
+
+      let base64Data = foto.imagen;
+      if (base64Data.includes('base64,')) {
+        base64Data = base64Data.split('base64,')[1];
+      }
+
+      if (!base64Data || base64Data.trim() === '') {
+        const err = new Error(`Foto #${index}: imagen Base64 inválida`);
+        err.status = 400;
+        throw err;
+      }
+
+      const nombreArchivo = `${consulta.id_consulta}-${index}.jpg`;
+      const rutaCompleta = path.join(folderPath, nombreArchivo);
+      const rutaParaBD = path.join(FOTOS_CARPETA_CONSULTA, nombreArchivo);
+
+      try {
+        const buffer = Buffer.from(base64Data, 'base64');
+        await fs.writeFile(rutaCompleta, buffer);
+        imagenesGuardadas.push(rutaCompleta);
+      } catch (fsError) {
+        fsError.status = 500;
+        throw fsError;
+      }
+
+      // Crear registro en la transacción
+      try {
+        await FotoConsulta.create({ ruta: rutaParaBD, nota: foto.nota || null, id_consulta: consulta.id_consulta }, { transaction: t });
+      } catch (dbError) {
+        dbError.status = dbError.status || 500;
+        throw dbError;
+      }
+    }
+
+    // 6. Commit transacción
+    await t.commit();
+
+    // 7. Eliminar archivos físicos antiguos (los que estaban antes de la actualización)
+    if (existingFotos && existingFotos.length > 0) {
+      for (const rutaRel of existingFotos) {
+        try {
+          if (!rutaRel) continue;
+          const rutaAbs = path.join(__dirname, '..', rutaRel);
+          // No eliminar si la ruta absoluta está entre las nuevas guardadas (posible sobreescritura)
+          const yaGuardada = imagenesGuardadas.some(p => path.resolve(p) === path.resolve(rutaAbs));
+          if (!yaGuardada) {
+            await fs.unlink(rutaAbs).catch(() => { });
+          }
+        } catch (e) {
+          // Ignore unlink errors
+        }
+      }
+    }
+
+    // 8. Devolver consulta completa
+    const consultaCompleta = await Consulta.findOne({ where: { id_consulta: consulta.id_consulta }, include: [{ model: Paciente }, { model: Usuario }, { model: FotoConsulta }] });
+    return consultaCompleta;
+
+  } catch (error) {
+    // Rollback si es necesario
+    if (t && !t.finished) {
+      try {
+        await t.rollback();
+      } catch (rollbackError) {
+        console.error('Error al revertir transacción en updateConsultaWithPhotos:', rollbackError);
+      }
+    }
+
+    // Limpiar imágenes escritas en disco durante el intento
+    if (imagenesGuardadas.length > 0) {
+      for (const p of imagenesGuardadas) {
+        try { await fs.unlink(p).catch(() => { }); } catch (e) { }
+      }
+    }
+
+    console.error('Error en updateConsultaWithPhotos:', error.message || error);
+    const status = error.status || (error.name === 'SequelizeForeignKeyConstraintError' ? 400 : (error.name === 'SequelizeValidationError' ? 400 : 500));
+    const err = new Error(error.message || 'Error al actualizar consulta con fotos');
+    err.status = status;
+    err.errors = error.errors || [error.message];
+    err.name = error.name;
+    throw err;
+  }
+};
+
 module.exports = {
   getAllConsultas,
   getConsultaById,
@@ -455,4 +593,5 @@ module.exports = {
   deleteConsulta,
   filterConsultasPaginated,
   createConsultaWithPhotos,
+  updateConsultaWithPhotos,
 };

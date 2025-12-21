@@ -128,6 +128,99 @@ router.post('/venta/validate', authenticate(), ventaController.validateVenta);
 
 /**
  * @swagger
+ * /venta/validateUpdate/{id}:
+ *   post:
+ *     summary: Valida los datos de una venta ANTES de actualizarla. Retorna status 200 si es válida o 400 con errores si no.
+ *     tags: [Venta]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fecha:
+ *                 type: string
+ *                 format: date-time
+ *               precio_original_comerciable_cup:
+ *                 type: number
+ *                 description: No puede ser negativo
+ *               precio_original_comerciable_usd:
+ *                 type: number
+ *                 description: No puede ser negativo
+ *               costo_producto_cup:
+ *                 type: number
+ *                 description: No puede ser negativo
+ *               cantidad:
+ *                 type: number
+ *                 description: No puede ser negativo. Si id_comerciable es producto, no puede exceder cantidad disponible.
+ *               precio_cobrado_cup:
+ *                 type: number
+ *                 description: No puede ser negativo
+ *               forma_pago:
+ *                 type: string
+ *                 enum: ["Efectivo", "Transferencia"]
+ *               nota:
+ *                 type: string
+ *               id_cliente:
+ *                 type: integer
+ *                 description: Opcional, si se proporciona debe existir
+ *               id_consulta:
+ *                 type: integer
+ *                 description: Opcional, si se proporciona debe existir
+ *               id_servicio_complejo:
+ *                 type: integer
+ *                 description: Opcional, si se proporciona debe existir
+ *               id_comerciable:
+ *                 type: integer
+ *                 description: Opcional, si se proporciona debe existir y reemplaza el comerciable. Si es un producto, todos los usuarios deben estar autorizados. El inventario del producto anterior se restituye y el nuevo se descuenta.
+ *               id_usuario:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 minItems: 1
+ *                 example: [1, 2, 3]
+ *                 description: Opcional, si se proporciona reemplaza la lista, todos deben existir y estar autorizados en el comerciable actual o nuevo.
+ *     responses:
+ *       200:
+ *         description: La venta es válida y puede ser actualizada
+ *         schema:
+ *           type: object
+ *           properties:
+ *             message:
+ *               type: string
+ *             valid:
+ *               type: boolean
+ *       400:
+ *         description: Hay errores de validación
+ *         schema:
+ *           type: object
+ *           properties:
+ *             message:
+ *               type: string
+ *             valid:
+ *               type: boolean
+ *             errors:
+ *               type: array
+ *               items:
+ *                 type: string
+ *       404:
+ *         description: Venta no encontrada
+ */
+router.post('/venta/validateUpdate/:id', authenticate(), ventaController.validateUpdate);
+// Alias con ortografía alternativa (no documentado explícitamente)
+router.post('/venta/validadteUpdate/:id', authenticate(), ventaController.validateUpdate);
+
+/**
+ * @swagger
  * /venta/create:
  *   post:
  *     summary: Crea una venta. Validaciones - id_usuario obligatorio, valores numéricos no negativos, IDs opcionales deben existir, roles autorizados si hay comerciable, cantidad de producto disponible.
