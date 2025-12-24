@@ -21,10 +21,12 @@ const getAllVentas = async () => {
         { model: Cliente, required: false },
         { model: Consulta, required: false, include: [{ model: Paciente, required: false }] },
         { model: Usuario, required: false },
-        { model: Comerciable, required: false, include: [
-          { model: Servicio, required: false },
-          { model: Producto, required: false, include: [{ model: Medicamento, required: false }] }
-        ] },
+        {
+          model: Comerciable, required: false, include: [
+            { model: Servicio, required: false },
+            { model: Producto, required: false, include: [{ model: Medicamento, required: false }] }
+          ]
+        },
         { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] }
       ]
     });
@@ -42,10 +44,12 @@ const getVentaById = async (id) => {
         { model: Cliente, required: false },
         { model: Consulta, required: false, include: [{ model: Paciente, required: false }] },
         { model: Usuario, required: false },
-        { model: Comerciable, required: false, include: [
-          { model: Servicio, required: false },
-          { model: Producto, required: false, include: [{ model: Medicamento, required: false }] }
-        ] },
+        {
+          model: Comerciable, required: false, include: [
+            { model: Servicio, required: false },
+            { model: Producto, required: false, include: [{ model: Medicamento, required: false }] }
+          ]
+        },
         { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] }
       ]
     });
@@ -139,7 +143,7 @@ const validateUsuariosRolesAutorizados = async (id_comerciable, usuarios) => {
   }
 
   const rolesAutorizados = comerciable.roles_autorizados.split(',').map(r => r.trim());
-  
+
   for (const userId of usuarios) {
     const usuario = await Usuario.findByPk(userId);
     if (!usuario) continue; // Ya fue validado en validateForeignIds
@@ -152,7 +156,7 @@ const validateUsuariosRolesAutorizados = async (id_comerciable, usuarios) => {
       } else if (comerciable.servicio && comerciable.servicio.nombre) {
         nombreComercial = `servicio "${comerciable.servicio.nombre}"`;
       }
-      
+
       errors.push(`Usuario "${usuario.nombre_usuario}" con rol "${usuario.rol}" no está autorizado a vender ${nombreComercial} (roles autorizados: ${rolesAutorizados.join(', ')})`);
     }
   }
@@ -301,7 +305,7 @@ const validateUpdate = async (id, ventaData) => {
   // Validar roles autorizados
   const id_comerciable_check = ventaData.id_comerciable !== undefined ? ventaData.id_comerciable : venta.id_comerciable;
   const usuarios_check = ventaData.id_usuario !== undefined ? ventaData.id_usuario : await venta.getUsuarios().then(u => u.map(x => x.id_usuario));
-  
+
   if (id_comerciable_check && usuarios_check.length > 0) {
     const rolesErrors = await validateUsuariosRolesAutorizados(id_comerciable_check, usuarios_check);
     errors.push(...rolesErrors);
@@ -311,7 +315,7 @@ const validateUpdate = async (id, ventaData) => {
   if (ventaData.id_comerciable || ventaData.cantidad !== undefined) {
     const id_comerciable_validation = ventaData.id_comerciable !== undefined ? ventaData.id_comerciable : venta.id_comerciable;
     const cantidad_validation = ventaData.cantidad !== undefined ? ventaData.cantidad : venta.cantidad;
-    
+
     const quantityCheck = await validateProductoQuantity(id_comerciable_validation, cantidad_validation);
     if (!quantityCheck.valid) {
       errors.push(quantityCheck.error);
@@ -460,7 +464,7 @@ const updateVenta = async (id, ventaData) => {
     if (ventaData.cantidad !== undefined && ventaData.cantidad !== venta.cantidad) {
       const diferencia = ventaData.cantidad - venta.cantidad;
       const id_comerciable_current = ventaData.id_comerciable !== undefined ? ventaData.id_comerciable : venta.id_comerciable;
-      
+
       const comerciable = await Comerciable.findByPk(id_comerciable_current, {
         include: [{ model: Producto, required: false }],
         transaction: t
@@ -537,42 +541,144 @@ const updateVenta = async (id, ventaData) => {
 const deleteVenta = async (id) => {
   const t = await sequelize.transaction();
   try {
-    const venta = await Venta.findByPk(id, { transaction: t });
+    // Buscar venta con sus relaciones
+    const venta = await Venta.findByPk(id, {
+      include: [
+        {
+          model: Comerciable,
+          include: [{ model: Producto }]
+        }
+      ],
+      transaction: t
+    });
+
     if (!venta) {
       await t.rollback();
       return false;
     }
 
     // Si el comerciable es un producto, devolver la cantidad al inventario
-    if (venta.id_comerciable) {
-      const comerciable = await Comerciable.findByPk(venta.id_comerciable, {
-        include: [{ model: Producto, required: false }],
-        transaction: t
-      });
+    if (venta.id_comerciable && venta.comerciable && venta.comerciable.producto) {
+      const nuevaCantidad = parseFloat(venta.comerciable.producto.cantidad) + parseFloat(venta.cantidad);
 
-      if (comerciable && comerciable.producto) {
-        const producto = comerciable.producto;
-        const nuevaCantidad = (producto.cantidad || 0) + (venta.cantidad || 0);
-        await producto.update({ cantidad: nuevaCantidad }, { transaction: t });
-      }
+      await Producto.update(
+        { cantidad: nuevaCantidad },
+        {
+          where: { id_comerciable: venta.comerciable.producto.id_comerciable },
+          transaction: t
+        }
+      );
     }
 
     // Eliminar asociaciones pivot
-    await VentaUsuario.destroy({ where: { id_venta: id }, transaction: t });
-    // Eliminar fotos asociadas a esta venta (y archivos)
-    const fotos = await FotoServicioComplejo.findAll({ where: { id_venta: id }, transaction: t });
-    for (const f of fotos) {
-      if (f.ruta) {
-        try { await fs.unlink(path.join(__dirname, '..', f.ruta)); } catch (e) { console.error('unlink error', e); }
+    await VentaUsuario.destroy({
+      where: { id_venta: id },
+      transaction: t
+    });
+
+    // Intentar eliminar fotos - si falla por columna faltante, manejamos de forma especial
+    try {
+      const fotos = await FotoServicioComplejo.findAll({
+        where: { id_venta: id },
+        transaction: t
+      });
+
+      for (const foto of fotos) {
+        const ruta = foto.ruta;
+        if (ruta) {
+          try {
+            await fs.unlink(path.join(__dirname, '..', ruta));
+          } catch (e) {
+            console.error('unlink error (ignorando):', e.message);
+          }
+        }
+        await foto.destroy({ transaction: t });
       }
-      await f.destroy({ transaction: t });
+    } catch (findErr) {
+      console.error('Error during FotoServicioComplejo.findAll:', findErr.message);
+
+      const isMissingColumn = findErr.parent && findErr.parent.code === '42703';
+      if (isMissingColumn) {
+        // ERROR CRÍTICO: La transacción está ahora ABORTED
+        // Necesitamos hacer rollback inmediatamente y ejecutar todo de nuevo sin la parte de fotos
+        console.warn('Columna faltante detectada. Haciendo rollback y ejecutando fallback...');
+        try {
+          await t.rollback();
+        } catch (rbErr) {
+          console.error('Error durante rollback:', rbErr.message);
+        }
+
+        // Ejecutar una nueva transacción SIN la parte de fotos
+        return await deleteVentaFallback(id);
+      } else {
+        // Si no es error de columna faltante, propagamos el error
+        throw findErr;
+      }
     }
+
     // Eliminar la venta
     await venta.destroy({ transaction: t });
 
     await t.commit();
     return true;
   } catch (error) {
+    console.error('Error en deleteVenta:', error.message);
+    try {
+      await t.rollback();
+    } catch (rbErr) {
+      console.error('Error durante rollback:', rbErr.message);
+    }
+    throw error;
+  }
+};
+
+// Función de fallback para cuando la tabla de fotos tiene problemas de esquema
+const deleteVentaFallback = async (id) => {
+  const t = await sequelize.transaction();
+  try {
+
+    // Buscar venta
+    const venta = await Venta.findByPk(id, {
+      include: [
+        {
+          model: Comerciable,
+          include: [{ model: Producto }]
+        }
+      ],
+      transaction: t
+    });
+
+    if (!venta) {
+      await t.rollback();
+      return false;
+    }
+
+    // Devolver cantidad al producto si aplica
+    if (venta.id_comerciable && venta.comerciable && venta.comerciable.producto) {
+      const nuevaCantidad = parseFloat(venta.comerciable.producto.cantidad) + parseFloat(venta.cantidad);
+
+      await Producto.update(
+        { cantidad: nuevaCantidad },
+        {
+          where: { id_comerciable: venta.comerciable.producto.id_comerciable },
+          transaction: t
+        }
+      );
+    }
+
+    // Eliminar asociaciones pivot
+    await VentaUsuario.destroy({
+      where: { id_venta: id },
+      transaction: t
+    });
+
+    // Eliminar la venta (sin intentar eliminar fotos)
+    await venta.destroy({ transaction: t });
+
+    await t.commit();
+    return true;
+  } catch (error) {
+    console.error('Error en deleteVentaFallback:', error.message);
     await t.rollback();
     throw error;
   }
@@ -585,27 +691,29 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
       { model: Cliente, required: false },
       { model: Consulta, required: false, include: [{ model: Paciente, required: false }] },
       { model: Usuario, required: false },
-      { model: Comerciable, required: false, include: [
-        { model: Servicio, required: false },
-        { model: Producto, required: false, include: [{ model: Medicamento, required: false }] }
-      ] },
+      {
+        model: Comerciable, required: false, include: [
+          { model: Servicio, required: false },
+          { model: Producto, required: false, include: [{ model: Medicamento, required: false }] }
+        ]
+      },
       { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] }
     ];
 
-    // Filtro detallado: por defecto true, si es false incluye ventas sin servicio_complejo
+    // Filtro detallado
     const detallado = filterCriteria && filterCriteria.detallado !== undefined ? filterCriteria.detallado : true;
     if (!detallado) {
-      // Si detallado es false, incluir ventas con id_servicio_complejo null
       whereClause[require('sequelize').Op.or] = [
         { id_servicio_complejo: null }
       ];
     }
     delete filterCriteria.detallado;
 
-    // Filtro por tipo de comerciable: Producto (productos que NO sean medicamentos), Medicamento
-    // Servicio (servicios que no sean servicio complejo) y Servicio Complejo
+    // Filtro por tipo de comerciable
     const tipoComerciableRaw = filterCriteria && filterCriteria.tipo_comerciable ? String(filterCriteria.tipo_comerciable).toLowerCase().trim() : null;
-    // No eliminar aún: lo procesamos después de obtener resultados
+    if (filterCriteria && filterCriteria.tipo_comerciable) {
+      delete filterCriteria.tipo_comerciable;
+    }
 
     // Filtros de fecha (rango)
     if (filterCriteria && filterCriteria.fecha_desde && filterCriteria.fecha_hasta) {
@@ -629,11 +737,11 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
       'costo_producto_cup',
       'precio_cobrado_cup'
     ];
-    
+
     for (const field of priceFields) {
       const minKey = `${field}_min`;
       const maxKey = `${field}_max`;
-      
+
       if (filterCriteria && (filterCriteria[minKey] || filterCriteria[maxKey])) {
         whereClause[field] = {};
         if (filterCriteria[minKey]) {
@@ -649,48 +757,111 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
 
     // Filtro por nombre de usuario
     if (filterCriteria && filterCriteria.nombre_usuario) {
-      include[2].where = { nombre_usuario: { [require('sequelize').Op.iLike]: `%${filterCriteria.nombre_usuario}%` } };
-      include[2].required = true;
+      // Buscar el índice del modelo Usuario en include
+      const usuarioIndex = include.findIndex(inc => inc.model === Usuario);
+      if (usuarioIndex !== -1) {
+        include[usuarioIndex].where = { nombre_usuario: { [require('sequelize').Op.iLike]: `%${filterCriteria.nombre_usuario}%` } };
+        include[usuarioIndex].required = true;
+      }
       delete filterCriteria.nombre_usuario;
     }
 
     // Filtro por nombre de cliente
     if (filterCriteria && filterCriteria.nombre_cliente) {
-      include[0].where = { nombre: { [require('sequelize').Op.iLike]: `%${filterCriteria.nombre_cliente}%` } };
-      include[0].required = true;
+      const clienteIndex = include.findIndex(inc => inc.model === Cliente);
+      if (clienteIndex !== -1) {
+        include[clienteIndex].where = { nombre: { [require('sequelize').Op.iLike]: `%${filterCriteria.nombre_cliente}%` } };
+        include[clienteIndex].required = true;
+      }
       delete filterCriteria.nombre_cliente;
     }
 
     // Filtro por nombre de producto (pivota por comerciable)
     if (filterCriteria && filterCriteria.nombre_producto) {
-      include[4].include[1].where = { nombre: { [require('sequelize').Op.iLike]: `%${filterCriteria.nombre_producto}%` } };
-      include[4].include[1].required = true;
-      include[4].required = true;
+      const comerciableIndex = include.findIndex(inc => inc.model === Comerciable);
+      if (comerciableIndex !== -1 && include[comerciableIndex].include) {
+        // Buscar el índice de Producto dentro de include[comerciableIndex].include
+        const productoIncludeIndex = include[comerciableIndex].include.findIndex(inc => inc.model === Producto);
+        if (productoIncludeIndex !== -1) {
+          include[comerciableIndex].include[productoIncludeIndex].where = {
+            nombre: { [require('sequelize').Op.iLike]: `%${filterCriteria.nombre_producto}%` }
+          };
+          include[comerciableIndex].include[productoIncludeIndex].required = true;
+          include[comerciableIndex].required = true;
+        }
+      }
       delete filterCriteria.nombre_producto;
     }
 
     // Filtro por descripción de servicio (pivota por comerciable)
     if (filterCriteria && filterCriteria.descripcion_servicio) {
-      include[4].include[0].where = { descripcion: { [require('sequelize').Op.iLike]: `%${filterCriteria.descripcion_servicio}%` } };
-      include[4].include[0].required = true;
-      include[4].required = true;
+      const comerciableIndex = include.findIndex(inc => inc.model === Comerciable);
+      if (comerciableIndex !== -1 && include[comerciableIndex].include) {
+        const servicioIncludeIndex = include[comerciableIndex].include.findIndex(inc => inc.model === Servicio);
+        if (servicioIncludeIndex !== -1) {
+          include[comerciableIndex].include[servicioIncludeIndex].where = {
+            descripcion: { [require('sequelize').Op.iLike]: `%${filterCriteria.descripcion_servicio}%` }
+          };
+          include[comerciableIndex].include[servicioIncludeIndex].required = true;
+          include[comerciableIndex].required = true;
+        }
+      }
       delete filterCriteria.descripcion_servicio;
     }
 
     // Filtro por nombre de paciente (pivota por consulta)
     if (filterCriteria && filterCriteria.nombre_paciente) {
-      include[1].include[0].where = { nombre: { [require('sequelize').Op.iLike]: `%${filterCriteria.nombre_paciente}%` } };
-      include[1].include[0].required = true;
-      include[1].required = true;
+      const consultaIndex = include.findIndex(inc => inc.model === Consulta);
+      if (consultaIndex !== -1 && include[consultaIndex].include) {
+        const pacienteIncludeIndex = include[consultaIndex].include.findIndex(inc => inc.model === Paciente);
+        if (pacienteIncludeIndex !== -1) {
+          include[consultaIndex].include[pacienteIncludeIndex].where = {
+            nombre: { [require('sequelize').Op.iLike]: `%${filterCriteria.nombre_paciente}%` }
+          };
+          include[consultaIndex].include[pacienteIncludeIndex].required = true;
+          include[consultaIndex].required = true;
+        }
+      }
       delete filterCriteria.nombre_paciente;
     }
 
-    // Filtros generales (cantidad, nota, forma_pago)
+    // Filtros generales (cantidad, nota, forma_pago) - solo para campos directos de Venta
+    const ventaDirectFields = ['cantidad', 'nota', 'forma_pago'];
     for (const key in filterCriteria) {
       if (Object.prototype.hasOwnProperty.call(filterCriteria, key)) {
         if (filterCriteria[key] === undefined || filterCriteria[key] === null) continue;
-        whereClause[key] = { [require('sequelize').Op.iLike]: `%${String(filterCriteria[key]).toLowerCase()}%` };
+
+        // Solo aplicamos filtro LIKE para campos directos de Venta
+        if (ventaDirectFields.includes(key)) {
+          whereClause[key] = { [require('sequelize').Op.iLike]: `%${String(filterCriteria[key]).toLowerCase()}%` };
+        } else {
+          // Para otros campos, igualarlos exactamente (ajusta según necesidades)
+          whereClause[key] = filterCriteria[key];
+        }
       }
+    }
+
+    // Si se proporcionó tipo_comerciable, aplicamos filtrado en memoria
+    if (tipoComerciableRaw) {
+      const allRows = await Venta.findAll({ where: whereClause, include, distinct: true });
+
+      let filtered = allRows;
+      if (tipoComerciableRaw === 'producto') {
+        filtered = filtered.filter(v => v.comerciable && v.comerciable.producto && !v.comerciable.producto.medicamento);
+      } else if (tipoComerciableRaw === 'medicamento' || tipoComerciableRaw === 'medicamneto') {
+        filtered = filtered.filter(v => v.comerciable && v.comerciable.producto && !!v.comerciable.producto.medicamento);
+      } else if (tipoComerciableRaw === 'servicio') {
+        filtered = filtered.filter(v => v.comerciable && v.comerciable.servicio && !v.servicio_complejo);
+      } else if (tipoComerciableRaw === 'servicio complejo' || tipoComerciableRaw === 'serviciocomplejo' || tipoComerciableRaw === 'servicio_complejo') {
+        filtered = filtered.filter(v => !!v.servicio_complejo);
+      }
+
+      const total = filtered.length;
+      const off = Number(offset) || 0;
+      const lim = Number(limit) || total;
+      const paginated = filtered.slice(off, off + lim);
+
+      return { count: total, rows: paginated };
     }
 
     const result = await Venta.findAndCountAll({
@@ -700,28 +871,6 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
       include,
       distinct: true
     });
-
-    // Si se proporcionó tipo_comerciable, filtramos los rows en memoria (mismo patrón usado en otros servicios)
-    if (tipoComerciableRaw) {
-      let filtered = result.rows;
-
-      if (tipoComerciableRaw === 'producto') {
-        // Producto = tiene producto y NO tiene medicamento asociado
-        filtered = filtered.filter(v => v.comerciable && v.comerciable.producto && !v.comerciable.producto.medicamento);
-      } else if (tipoComerciableRaw === 'medicamento' || tipoComerciableRaw === 'medicamneto') {
-        // Medicamento = producto con medicamento asociado
-        filtered = filtered.filter(v => v.comerciable && v.comerciable.producto && !!v.comerciable.producto.medicamento);
-      } else if (tipoComerciableRaw === 'servicio') {
-        // Servicio = tiene comerciable.servicio y NO es servicio complejo
-        filtered = filtered.filter(v => v.comerciable && v.comerciable.servicio && !v.servicio_complejo);
-      } else if (tipoComerciableRaw === 'servicio complejo' || tipoComerciableRaw === 'serviciocomplejo' || tipoComerciableRaw === 'servicio_complejo') {
-        // Servicio Complejo = ventas asociadas a servicio complejo
-        filtered = filtered.filter(v => !!v.servicio_complejo);
-      }
-
-      result.count = filtered.length;
-      result.rows = filtered;
-    }
 
     return result;
   } catch (error) {
@@ -750,10 +899,12 @@ const getVentasByPacienteAndTipoMedicamento = async (pacienteId, tipoMedicamento
     const ventas = await Venta.findAll({
       include: [
         { model: Consulta, required: true, include: [{ model: Paciente, required: true, where: { id_paciente: pacienteId } }] },
-        { model: Comerciable, required: true, include: [
-          { model: Producto, required: true, include: [{ model: Medicamento, required: true, where: { tipo_medicamento: tipoMedicamento } }] },
-          { model: Servicio, required: false }
-        ] },
+        {
+          model: Comerciable, required: true, include: [
+            { model: Producto, required: true, include: [{ model: Medicamento, required: true, where: { tipo_medicamento: tipoMedicamento } }] },
+            { model: Servicio, required: false }
+          ]
+        },
         { model: Cliente, required: false },
         { model: Usuario, required: false },
         { model: ServicioComplejo, required: false }
