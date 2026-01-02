@@ -4,7 +4,7 @@ const sequelize = require("../helpers/database.js");
 const tiposMedicamento = [
   "vacuna", "antiparasitario", "antibiótico", "digestivo", "vitaminico", 
   "anestesico", "sedante", "crema", "oftalmico", "otico", "energizante", 
-  "inmuno estimulante", "anticeptico", "desinfectante"
+  "inmuno estimulante", "anticeptico", "desinfectante", "antiinflamatorio", "analgésico"
 ];
 
 const Medicamento = sequelize.define("medicamento", {

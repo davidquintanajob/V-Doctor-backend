@@ -442,4 +442,100 @@ router.post('/consulta/CreateWithPhotos', authenticate(), consultaController.cre
  *         description: Error interno del servidor
  */
 router.put('/consulta/UpdateWithPhotos/:id', authenticate(), consultaController.updateConsultaWithPhotos);
+
+/**
+ * @swagger
+ * /consulta/UpdateWithPhotosVentas/{id}:
+ *   put:
+ *     summary: Actualizar una consulta, reemplazar sus fotos y (opcional) reemplazar ventas relacionadas
+ *     tags: [Consultas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID de la consulta a actualizar
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fecha:
+ *                 type: string
+ *                 format: date-time
+ *               motivo:
+ *                 type: string
+ *               diagnostico:
+ *                 type: string
+ *               anamnesis:
+ *                 type: string
+ *               tratamiento:
+ *                 type: string
+ *               patologia:
+ *                 type: string
+ *               id_paciente:
+ *                 type: integer
+ *               id_usuario:
+ *                 type: integer
+ *               fotos:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     imagen:
+ *                       type: string
+ *                       description: Base64 encoded image
+ *                     nota:
+ *                       type: string
+ *               ventas:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   description: Lista de ventas a asociar (si se pasa, se eliminarán las ventas actuales y se sustituirán por estas). Cada venta será validada y procesada usando la lógica de los endpoints de venta.
+ *           examples:
+ *             example1:
+ *               value:
+ *                 fecha: "2025-12-21T10:30:00Z"
+ *                 motivo: "Control y venta de medicamento"
+ *                 diagnostico: "Parásitos"
+ *                 anamnesis: "Síntomas leves"
+ *                 tratamiento: "Desparasitación"
+ *                 patologia: "Sin patologías"
+ *                 id_paciente: 1
+ *                 id_usuario: 1
+ *                 fotos:
+ *                   - imagen: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+ *                     nota: "Foto de ejemplo"
+ *                 ventas:
+ *                   - fecha: "2025-12-21T10:45:00Z"
+ *                     id_venta: "0"
+ *                     precio_original_comerciable_cup: 250.0
+ *                     precio_original_comerciable_usd: 10.0
+ *                     costo_producto_cup: 150.0
+ *                     cantidad: 1
+ *                     precio_cobrado_cup: 250.0
+ *                     forma_pago: "Efectivo"
+ *                     nota: "Venta de antiparasitario"
+ *                     id_cliente: 2
+ *                     id_consulta: 1
+ *                     id_servicio_complejo: null
+ *                     id_comerciable: 5
+ *                     id_usuario:
+ *                       - 1
+ *     responses:
+ *       200:
+ *         description: Consulta y ventas actualizadas exitosamente
+ *       400:
+ *         description: Datos inválidos
+ *       404:
+ *         description: Consulta no encontrada
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.put('/consulta/UpdateWithPhotosVentas/:id', authenticate(), consultaController.updateConsultaWithPhotosAndVentas);
 module.exports = router;

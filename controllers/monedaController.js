@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const monedaFilePath = path.join(__dirname, '../cambio_moneda/moneda.txt');
+const monedaFilePath = path.join(__dirname, '../local_config/moneda.txt');
 
 const getMoneda = (req, res) => {
     fs.readFile(monedaFilePath, 'utf8', (err, data) => {
@@ -16,7 +16,10 @@ const getMoneda = (req, res) => {
 };
 
 const updateMoneda = (req, res) => {
-    const { value } = req.params;
+    const { value } = req.body || {};
+    if (typeof value === 'undefined' || value === null) {
+        return res.status(400).json({ error: 'El campo `value` es requerido en el body.' });
+    }
     fs.writeFile(monedaFilePath, value, 'utf8', (err) => {
         if (err) {
             return res.status(500).json({ error: 'Error al escribir en el archivo de moneda.' });

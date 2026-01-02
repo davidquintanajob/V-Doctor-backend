@@ -1,0 +1,4 @@
+{
+    "value": "Exeso 10",
+    "isRedondeoFromPlus": "false"
+}

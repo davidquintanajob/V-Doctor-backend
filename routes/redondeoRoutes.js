@@ -1,23 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const monedaController = require('../controllers/monedaController');
+const redondeoController = require('../controllers/redondeoController');
 
 /**
  * @swagger
  * tags:
- *   name: Moneda
- *   description: API para gestionar el valor de la moneda
+ *   name: Redondeo
+ *   description: API para gestionar las opciones de redondeo
  */
 
 /**
  * @swagger
- * /moneda:
+ * /redondeo:
  *   get:
- *     summary: Obtener el valor actual de la moneda
- *     tags: [Moneda]
+ *     summary: Obtener las opciones actuales de redondeo
+ *     tags: [Redondeo]
  *     responses:
  *       200:
- *         description: Valor de la moneda
+ *         description: Opciones de redondeo
  *         content:
  *           application/json:
  *             schema:
@@ -26,18 +26,18 @@ const monedaController = require('../controllers/monedaController');
  *                 value:
  *                   type: string
  *       404:
- *         description: Valor de la moneda no especificado
+ *         description: Opciones de redondeo no especificadas
  *       500:
  *         description: Error interno del servidor
  */
-router.get('/moneda', monedaController.getMoneda);
+router.get('/redondeo', redondeoController.getRedondeo);
 
 /**
  * @swagger
- * /moneda/updateMoneda:
+ * /redondeo/updateRedondeo:
  *   put:
- *     summary: Actualizar el valor de la moneda
- *     tags: [Moneda]
+ *     summary: Actualizar las opciones de redondeo
+ *     tags: [Redondeo]
  *     requestBody:
  *       required: true
  *       content:
@@ -47,17 +47,18 @@ router.get('/moneda', monedaController.getMoneda);
  *             properties:
  *               value:
  *                 type: string
- *             required: [value]
- *           example:
- *             value: "S/ 3.50"
+ *               isRedondeoFromPlus:
+ *                 type: string
+ *             required:
+ *               - value
  *     responses:
  *       200:
- *         description: Valor de la moneda actualizado
+ *         description: Opciones de redondeo actualizadas
  *       400:
- *         description: Campo `value` faltante en el body
+ *         description: Solicitud inválida
  *       500:
  *         description: Error interno del servidor
  */
-router.put('/moneda/updateMoneda', monedaController.updateMoneda);
+router.put('/redondeo/updateRedondeo', redondeoController.updateRedondeo);
 
 module.exports = router;

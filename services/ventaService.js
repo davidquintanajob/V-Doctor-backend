@@ -311,14 +311,29 @@ const validateUpdate = async (id, ventaData) => {
     errors.push(...rolesErrors);
   }
 
-  // Validar cantidad de producto disponible
-  if (ventaData.id_comerciable || ventaData.cantidad !== undefined) {
-    const id_comerciable_validation = ventaData.id_comerciable !== undefined ? ventaData.id_comerciable : venta.id_comerciable;
-    const cantidad_validation = ventaData.cantidad !== undefined ? ventaData.cantidad : venta.cantidad;
+  // Validar cantidad de producto disponible considerando la diferencia (delta)
+  // - Si se cambia de comerciable: validar que el nuevo comerciable tenga suficiente para la cantidad efectiva (nueva o existente)
+  // - Si se mantiene el mismo comerciable y se modifica la cantidad: validar solo la diferencia positiva (solo restar lo extra)
+  const id_comerciable_actual = venta.id_comerciable;
+  const id_comerciable_nuevo = ventaData.id_comerciable !== undefined ? ventaData.id_comerciable : id_comerciable_actual;
 
-    const quantityCheck = await validateProductoQuantity(id_comerciable_validation, cantidad_validation);
+  if (ventaData.id_comerciable !== undefined && String(ventaData.id_comerciable) !== String(id_comerciable_actual)) {
+    // Se está moviendo la venta a otro comerciable: verificar que el nuevo comerciable tenga stock para la cantidad efectiva
+    const cantidadEfectiva = ventaData.cantidad !== undefined ? Number(ventaData.cantidad) : Number(venta.cantidad);
+    const quantityCheck = await validateProductoQuantity(id_comerciable_nuevo, cantidadEfectiva);
     if (!quantityCheck.valid) {
       errors.push(quantityCheck.error);
+    }
+  } else if (ventaData.cantidad !== undefined) {
+    // Mismo comerciable (o no cambia): validar solo la diferencia positiva
+    const cantidadNueva = Number(ventaData.cantidad);
+    const cantidadAntigua = Number(venta.cantidad);
+    const delta = cantidadNueva - cantidadAntigua;
+    if (delta > 0) {
+      const quantityCheck = await validateProductoQuantity(id_comerciable_nuevo, delta);
+      if (!quantityCheck.valid) {
+        errors.push(quantityCheck.error);
+      }
     }
   }
 
@@ -843,7 +858,7 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
 
     // Si se proporcionó tipo_comerciable, aplicamos filtrado en memoria
     if (tipoComerciableRaw) {
-      const allRows = await Venta.findAll({ where: whereClause, include, distinct: true });
+      const allRows = await Venta.findAll({ where: whereClause, include, distinct: true, order: [['fecha', 'DESC']] });
 
       let filtered = allRows;
       if (tipoComerciableRaw === 'producto') {
@@ -856,6 +871,8 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
         filtered = filtered.filter(v => !!v.servicio_complejo);
       }
 
+      // Ordenar por fecha (más reciente primero) antes de paginar
+      filtered.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       const total = filtered.length;
       const off = Number(offset) || 0;
       const lim = Number(limit) || total;
@@ -869,7 +886,8 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
       limit,
       offset,
       include,
-      distinct: true
+      distinct: true,
+      order: [['fecha', 'DESC']]
     });
 
     return result;

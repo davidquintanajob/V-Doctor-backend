@@ -42,7 +42,48 @@ const getConsultaById = async (id) => {
       include: [
         { model: Paciente, required: false },
         { model: FotoConsulta, required: false },
-        { model: Usuario, required: false }
+        { model: Usuario, required: false },
+        {
+          model: Venta,
+          required: false,
+          include: [
+            {
+              model: Comerciable,
+              required: false,
+              include: [
+                {
+                  model: Servicio,
+                  required: false,
+                  as: 'servicio'
+                },
+                {
+                  model: Producto,
+                  required: false,
+                  include: [
+                    {
+                      model: Medicamento,
+                      required: false
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              model: ServicioComplejo,
+              required: false,
+              foreignKey: 'id_servicio_complejo',
+              targetKey: 'id_comerciable'
+            },
+            // Agregar esta sección para incluir los usuarios relacionados
+            {
+              model: Usuario,
+              required: false,
+              through: { attributes: [] } // Para excluir los datos de la tabla intermedia
+              // Si necesitas datos específicos de la relación, puedes especificarlos:
+              // through: { attributes: ['campo1', 'campo2'] }
+            }
+          ]
+        }
       ]
     });
     return consulta;
@@ -462,15 +503,16 @@ const updateConsultaWithPhotos = async (id, consultaData, fotos) => {
   let existingFotos = [];
 
   try {
-    // 1. Buscar la consulta
-    const consulta = await Consulta.findOne({ where: { id_consulta: id }, include: [{ model: FotoConsulta }], transaction: t, lock: t.LOCK && t.LOCK.UPDATE });
+    // 1. Buscar la consulta y bloquear solo su fila (sin joins) para evitar FOR UPDATE sobre outer joins
+    const consulta = await Consulta.findOne({ where: { id_consulta: id }, transaction: t, lock: t.LOCK.UPDATE });
     if (!consulta) {
       await t.rollback();
       return null;
     }
 
-    // Mantener listado de fotos actuales para borrado físico posterior
-    existingFotos = Array.isArray(consulta.foto_consultas) ? consulta.foto_consultas.map(f => f.ruta) : (consulta.FotoConsultas ? consulta.FotoConsultas.map(f => f.ruta) : []);
+    // Obtener las fotos actuales por separado (sin hacer join en la consulta bloqueada)
+    const fotosRows = await FotoConsulta.findAll({ where: { id_consulta: id }, transaction: t });
+    existingFotos = Array.isArray(fotosRows) ? fotosRows.map(f => f.ruta) : [];
 
     // 2. Actualizar campos de la consulta dentro de la transacción
     await consulta.update(consultaData, { transaction: t });
@@ -478,10 +520,20 @@ const updateConsultaWithPhotos = async (id, consultaData, fotos) => {
     const FOTOS_CARPETA_CONSULTA = process.env.FOTOS_CARPETA_CONSULTA || 'fotos/consulta';
     const folderPath = path.join(__dirname, '..', FOTOS_CARPETA_CONSULTA);
 
-    // Si no vienen fotos, solo actualizamos la consulta
+    // Si no vienen fotos, o si vienen pero ninguna tiene campo 'imagen', solo actualizamos la consulta
+    let fotosToProcess = null;
     if (!fotos || !Array.isArray(fotos) || fotos.length === 0) {
       await t.commit();
       return await getConsultaById(consulta.id_consulta);
+    } else {
+      // Filtrar únicamente las fotos que contienen realmente una imagen (base64 string)
+      const fotosConImagen = fotos.filter(f => f && typeof f.imagen === 'string' && f.imagen.trim() !== '');
+      if (fotosConImagen.length === 0) {
+        // Se pasó un arreglo de fotos pero sin imágenes: interpretamos que no se desea reemplazar fotos
+        await t.commit();
+        return await getConsultaById(consulta.id_consulta);
+      }
+      fotosToProcess = fotosConImagen;
     }
 
     // 3. Eliminar registros antiguos de fotos en BD (dentro de la transacción)
@@ -491,15 +543,11 @@ const updateConsultaWithPhotos = async (id, consultaData, fotos) => {
     await fs.mkdir(folderPath, { recursive: true });
 
     // 5. Procesar y guardar cada nueva foto (escribir en disco y crear registro en BD)
-    for (let i = 0; i < fotos.length; i++) {
-      const foto = fotos[i];
+    for (let i = 0; i < fotosToProcess.length; i++) {
+      const foto = fotosToProcess[i];
       const index = i + 1;
 
-      if (!foto || !foto.imagen || typeof foto.imagen !== 'string') {
-        const err = new Error(`Foto #${index}: imagen es requerida`);
-        err.status = 400;
-        throw err;
-      }
+      // foto.imagen ya filtrada: validar base64 mínimo
 
       let base64Data = foto.imagen;
       if (base64Data.includes('base64,')) {

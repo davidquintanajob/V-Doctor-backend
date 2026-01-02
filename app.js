@@ -292,6 +292,7 @@ function setupRelations() {
 
 // Configurar rutas
 const monedaRoutes = require('./routes/monedaRoutes');
+const redondeoRoutes = require('./routes/redondeoRoutes');
 const comerciableRoutes = require('./routes/comerciableRoutes');
 const productoRoutes = require('./routes/productoRoutes');
 const medicamentoRoutes = require('./routes/medicamentoRoutes');
@@ -311,6 +312,7 @@ app.use('/', pacienteRoutes);
 app.use('/', consultaRoutes);
 app.use('/', clientePacienteRoutes);
 app.use('/', monedaRoutes);
+app.use('/', redondeoRoutes);
 app.use('/', comerciableRoutes);
 app.use('/', productoRoutes);
 app.use('/', medicamentoRoutes);
@@ -328,13 +330,17 @@ const server = http.createServer(app);
 const startApp = async () => {
   try {
     // Crear directorio y archivo para cambio de moneda
-    const monedaDir = path.join(__dirname, 'cambio_moneda');
+    const monedaDir = path.join(__dirname, 'local_config');
     if (!fs.existsSync(monedaDir)) {
       fs.mkdirSync(monedaDir);
     }
     const monedaFile = path.join(monedaDir, 'moneda.txt');
     if (!fs.existsSync(monedaFile)) {
       fs.writeFileSync(monedaFile, '');
+    }
+    const redondeoFile = path.join(monedaDir, 'redondeo_options.txt');
+    if (!fs.existsSync(redondeoFile)) {
+      fs.writeFileSync(redondeoFile, '');
     }
 
     // Crear carpetas para fotos si no existen
