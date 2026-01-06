@@ -254,7 +254,7 @@ router.post('/cliente/filter/:limit/:page', authenticate(), clienteController.fi
  *                       type: string
  *                     sexo:
  *                       type: string
- *                       enum: [masculino, femenino, otros]
+ *                       enum: [macho, hembra, otros]
  *                     raza:
  *                       type: string
  *                     especie:

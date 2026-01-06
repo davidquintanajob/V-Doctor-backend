@@ -100,7 +100,7 @@ router.get('/paciente/:id', authenticate(), pacienteController.getPacienteById);
  *                 type: string
  *               sexo:
  *                 type: string
- *                 enum: [masculino, femenino, otros]
+ *                 enum: [macho, hembra, otros]
  *               raza:
  *                 type: string
  *               especie:
@@ -132,7 +132,7 @@ router.get('/paciente/:id', authenticate(), pacienteController.getPacienteById);
  *                 description: Base64 encoded image (opcional). Si se proporciona, se guardará automáticamente en la carpeta de fotos del paciente
  *           example:
  *             nombre: "Fido"
- *             sexo: "masculino"
+ *             sexo: "macho"
  *             raza: "Labrador"
  *             especie: "Canino"
  *             fecha_nacimiento: "2020-05-15"
@@ -179,7 +179,7 @@ router.post('/paciente/Create', authenticate(), pacienteController.createPacient
  *                 type: string
  *               sexo:
  *                 type: string
- *                 enum: [masculino, femenino, otros]
+ *                 enum: [macho, hembra, otros]
  *               raza:
  *                 type: string
  *               especie:
@@ -344,7 +344,7 @@ router.post('/paciente/Filter/:limit/:page', authenticate(), pacienteController.
  *                 type: string
  *               sexo:
  *                 type: string
- *                 enum: [masculino, femenino, otros]
+ *                 enum: [macho, hembra, otros]
  *               raza:
  *                 type: string
  *               especie:
@@ -398,7 +398,7 @@ router.post('/paciente/Filter/:limit/:page', authenticate(), pacienteController.
  *             example1:
  *               value:
  *                 nombre: "Max"
- *                 sexo: "masculino"
+ *                 sexo: "macho"
  *                 raza: "Labrador"
  *                 especie: "Canino"
  *                 fecha_nacimiento: "2020-05-15"

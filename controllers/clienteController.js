@@ -116,7 +116,7 @@ const createClienteWithPatients = async (req, res) => {
       const errs = [];
       if (!p.nombre) errs.push('nombre es requerido');
       if (!p.sexo) errs.push('sexo es requerido');
-      if (p.sexo && !['masculino', 'femenino', 'otros'].includes(p.sexo)) errs.push('sexo inválido');
+      if (p.sexo && !['macho', 'hembra', 'otros'].includes(p.sexo)) errs.push('sexo inválido');
       if (!p.raza) errs.push('raza es requerida');
       if (!p.especie) errs.push('especie es requerida');
       if (p.especie && !especies.includes(p.especie)) errs.push('especie inválida');
