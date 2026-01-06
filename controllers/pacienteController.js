@@ -28,7 +28,7 @@ const createPaciente = async (req, res) => {
 
     if (!nombre) errors.push('nombre es requerido');
     if (!sexo) errors.push('sexo es requerido');
-    if (sexo && !['masculino', 'femenino', 'otros'].includes(sexo)) errors.push('sexo inválido');
+    if (sexo && !['macho', 'hembra', 'otros'].includes(sexo)) errors.push('sexo inválido');
     if (!raza) errors.push('raza es requerida');
     if (!especie) errors.push('especie es requerida');
     if (especie && !especies.includes(especie)) errors.push('especie inválida');
@@ -71,7 +71,7 @@ const updatePaciente = async (req, res) => {
     const { nombre, sexo, raza, especie, fecha_nacimiento, comprado_adoptado, historia_clinica, motivo_fallecimiento, chip, agresividad, descuento, imagen } = req.body;
     const errors = [];
 
-    if (sexo && !['masculino', 'femenino', 'otros'].includes(sexo)) errors.push('sexo inválido');
+    if (sexo && !['macho', 'hembra', 'otros'].includes(sexo)) errors.push('sexo inválido');
     if (especie && !especies.includes(especie)) errors.push('especie inválida');
     if (comprado_adoptado && !['comprado', 'adoptado'].includes(comprado_adoptado)) errors.push('comprado_adoptado inválido');
     if (motivo_fallecimiento && !motivosFallecimiento.includes(motivo_fallecimiento)) errors.push('motivo_fallecimiento inválido');
@@ -148,7 +148,7 @@ const createPacienteWithClients = async (req, res) => {
 
     if (!nombre) errors.push('nombre es requerido');
     if (!sexo) errors.push('sexo es requerido');
-    if (sexo && !['masculino', 'femenino', 'otros'].includes(sexo)) errors.push('sexo inválido');
+    if (sexo && !['macho', 'hembra', 'otros'].includes(sexo)) errors.push('sexo inválido');
     if (!raza) errors.push('raza es requerida');
     if (!especie) errors.push('especie es requerida');
     if (especie && !especies.includes(especie)) errors.push('especie inválida');

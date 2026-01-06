@@ -19,7 +19,7 @@ const Paciente = sequelize.define("paciente", {
     allowNull: false,
     validate: {
       isIn: {
-        args: [["masculino", "femenino", "otros"]],
+        args: [["macho", "hembra", "otros"]],
         msg: "El sexo especificado no es válido",
       },
     },
