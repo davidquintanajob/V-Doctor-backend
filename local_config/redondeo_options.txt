@@ -1,4 +1,4 @@
 {
-    "value": "Exeso 10",
+    "value": "Exeso 5",
     "isRedondeoFromPlus": "false"
 }

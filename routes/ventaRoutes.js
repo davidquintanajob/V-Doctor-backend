@@ -100,6 +100,9 @@ router.get('/venta/:id', authenticate(), ventaController.getVentaById);
  *                 items:
  *                   type: integer
  *                 minItems: 1
+ *               exedente_redondeo:
+ *                 type: number
+ *                 description: No puede ser negativo. Si no se provee, por defecto es 0.
  *     responses:
  *       200:
  *         description: La venta es válida y puede ser creada
@@ -189,6 +192,9 @@ router.post('/venta/validate', authenticate(), ventaController.validateVenta);
  *                 minItems: 1
  *                 example: [1, 2, 3]
  *                 description: Opcional, si se proporciona reemplaza la lista, todos deben existir y estar autorizados en el comerciable actual o nuevo.
+ *               exedente_redondeo:
+ *                 type: number
+ *                 description: No puede ser negativo. Si no se provee, por defecto es 0.
  *     responses:
  *       200:
  *         description: La venta es válida y puede ser actualizada
@@ -269,8 +275,9 @@ router.post('/venta/validadteUpdate/:id', authenticate(), ventaController.valida
  *                 type: integer
  *                 description: Opcional, si se proporciona debe existir
  *               id_consulta:
- *                 type: integer
- *                 description: Opcional, si se proporciona debe existir
+ *               exedente_redondeo:
+ *                 type: number
+ *                 description: No puede ser negativo. Si no se provee, por defecto es 0.
  *               id_servicio_complejo:
  *                 type: integer
  *                 description: Opcional, si se proporciona debe existir

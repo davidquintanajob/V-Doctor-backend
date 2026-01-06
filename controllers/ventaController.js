@@ -2,6 +2,24 @@ const ventaService = require('../services/ventaService');
 const { tiposMedicamento } = require('../models/medicamento');
 const { Paciente } = require('../models/paciente');
 
+// Valida que exedente_redondeo sea numérico y no negativo
+const validateExedente = (value) => {
+  if (value === undefined || value === null) return { valid: true };
+  const num = Number(value);
+  if (Number.isNaN(num) || !Number.isFinite(num)) return { valid: false, error: 'exedente_redondeo debe ser un número' };
+  if (num < 0) return { valid: false, error: 'exedente_redondeo no puede ser negativo' };
+  return { valid: true };
+};
+
+// Valida que descuento sea numérico entre 0 y 100 (si se proporciona)
+const validateDescuento = (value) => {
+  if (value === undefined || value === null) return { valid: true };
+  const num = Number(value);
+  if (Number.isNaN(num) || !Number.isFinite(num)) return { valid: false, error: 'descuento debe ser un número' };
+  if (num < 0 || num > 100) return { valid: false, error: 'descuento debe estar entre 0 y 100' };
+  return { valid: true };
+};
+
 const getAllVentas = async (req, res) => {
   try {
     const ventas = await ventaService.getAllVentas();
@@ -23,6 +41,23 @@ const getVentaById = async (req, res) => {
 
 const validateVenta = async (req, res) => {
   try {
+    // Validaciones locales de campos nuevos
+    const descVal = validateDescuento(req.body.descuento);
+    if (!descVal.valid) {
+      return res.status(400).json({
+        message: 'Hay errores que impiden la creación de la venta',
+        valid: false,
+        errors: [descVal.error]
+      });
+    }
+    const exVal = validateExedente(req.body.exedente_redondeo);
+    if (!exVal.valid) {
+      return res.status(400).json({
+        message: 'Hay errores que impiden la creación de la venta',
+        valid: false,
+        errors: [exVal.error]
+      });
+    }
     const validation = await ventaService.validateCreate(req.body);
     if (validation.valid) {
       return res.status(200).json({ 
@@ -42,6 +77,23 @@ const validateVenta = async (req, res) => {
 
 const validateUpdate = async (req, res) => {
   try {
+    // Validaciones locales de campos nuevos
+    const descVal = validateDescuento(req.body.descuento);
+    if (!descVal.valid) {
+      return res.status(400).json({
+        message: 'Hay errores que impiden la actualización de la venta',
+        valid: false,
+        errors: [descVal.error]
+      });
+    }
+    const exVal = validateExedente(req.body.exedente_redondeo);
+    if (!exVal.valid) {
+      return res.status(400).json({
+        message: 'Hay errores que impiden la actualización de la venta',
+        valid: false,
+        errors: [exVal.error]
+      });
+    }
     const validation = await ventaService.validateUpdate(req.params.id, req.body);
     if (validation.valid) {
       return res.status(200).json({
@@ -61,7 +113,13 @@ const validateUpdate = async (req, res) => {
 
 const createVenta = async (req, res) => {
   try {
-    // Validar primero
+    // Validaciones locales de campos nuevos
+    const descVal = validateDescuento(req.body.descuento);
+    if (!descVal.valid) return res.status(400).json({ errors: [descVal.error] });
+    const exVal = validateExedente(req.body.exedente_redondeo);
+    if (!exVal.valid) return res.status(400).json({ errors: [exVal.error] });
+
+    // Validar primero (servicio)
     const validation = await ventaService.validateCreate(req.body);
     if (!validation.valid) {
       return res.status(400).json({ errors: validation.errors });
@@ -77,7 +135,13 @@ const createVenta = async (req, res) => {
 
 const updateVenta = async (req, res) => {
   try {
-    // Validar primero
+    // Validaciones locales de campos nuevos
+    const descVal = validateDescuento(req.body.descuento);
+    if (!descVal.valid) return res.status(400).json({ errors: [descVal.error] });
+    const exVal = validateExedente(req.body.exedente_redondeo);
+    if (!exVal.valid) return res.status(400).json({ errors: [exVal.error] });
+
+    // Validar primero (servicio)
     const validation = await ventaService.validateUpdate(req.params.id, req.body);
     if (!validation.valid) {
       return res.status(400).json({ errors: validation.errors });

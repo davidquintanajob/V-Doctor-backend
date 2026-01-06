@@ -17,35 +17,65 @@ const Venta = sequelize.define("venta", {
     type: DataTypes.DOUBLE,
     allowNull: false,
     set(value) {
-      this.setDataValue('precio_original_comerciable_cup', Math.round(value * 100) / 100);
+      this.setDataValue('precio_original_comerciable_cup', 
+        Math.round(parseFloat(value) * 100000) / 100000
+      );
     }
   },
   precio_original_comerciable_usd: {
     type: DataTypes.DOUBLE,
     allowNull: false,
     set(value) {
-      this.setDataValue('precio_original_comerciable_usd', Math.round(value * 100) / 100);
+      this.setDataValue('precio_original_comerciable_usd', 
+        Math.round(parseFloat(value) * 100000) / 100000
+      );
     }
   },
   costo_producto_cup: {
     type: DataTypes.DOUBLE,
     defaultValue: 0,
     set(value) {
-      this.setDataValue('costo_producto_cup', Math.round(value * 100) / 100);
+      this.setDataValue('costo_producto_cup', 
+        Math.round(parseFloat(value) * 100000) / 100000
+      );
     }
   },
   cantidad: {
     type: DataTypes.DOUBLE,
     allowNull: false,
     set(value) {
-      this.setDataValue('cantidad', Math.round(value * 100) / 100);
+      this.setDataValue('cantidad', 
+        Math.round(parseFloat(value) * 100000) / 100000
+      );
     }
   },
   precio_cobrado_cup: {
     type: DataTypes.DOUBLE,
     allowNull: false,
     set(value) {
-      this.setDataValue('precio_cobrado_cup', Math.round(value * 100) / 100);
+      this.setDataValue('precio_cobrado_cup', 
+        Math.round(parseFloat(value) * 100000) / 100000
+      );
+    }
+  },
+  exedente_redondeo: {
+    type: DataTypes.DOUBLE,
+    allowNull: false,
+    defaultValue: 0,
+    set(value) {
+      this.setDataValue('exedente_redondeo', 
+        Math.round(parseFloat(value) * 100000) / 100000
+      );
+    }
+  },
+  descuento: {
+    type: DataTypes.DOUBLE,
+    allowNull: false,
+    defaultValue: 0,
+    set(value) {
+      this.setDataValue('descuento', 
+        Math.round(parseFloat(value) * 100000) / 100000
+      );
     }
   },
   forma_pago: {
@@ -82,8 +112,8 @@ const Venta = sequelize.define("venta", {
     type: DataTypes.INTEGER,
     allowNull: true,
     references: {
-      model: 'servicio_complejos', // table name
-      key: 'id_comerciable'      // target column
+      model: 'servicio_complejos',
+      key: 'id_comerciable'
     }
   },
   id_comerciable: {

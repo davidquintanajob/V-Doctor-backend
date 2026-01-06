@@ -887,7 +887,7 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
       offset,
       include,
       distinct: true,
-      order: [['fecha', 'DESC']]
+      order: [['createdAt', 'DESC']]
     });
 
     return result;
