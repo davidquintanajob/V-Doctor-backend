@@ -18,14 +18,14 @@ const Producto = sequelize.define("producto", {
     type: DataTypes.DOUBLE,
     allowNull: false,
     set(value) {
-      this.setDataValue('costo_usd', Math.round(value * 100) / 100);
+      this.setDataValue('costo_usd', Math.round(value * 100000) / 100000);
     }
   },
   costo_cup: {
     type: DataTypes.DOUBLE,
     allowNull: false,
     set(value) {
-      this.setDataValue('costo_cup', Math.round(value * 100) / 100);
+      this.setDataValue('costo_cup', Math.round(value * 100000) / 100000);
     }
   },
   categoria: {

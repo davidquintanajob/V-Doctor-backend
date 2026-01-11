@@ -46,15 +46,30 @@ router.get('/moneda', monedaController.getMoneda);
  *             type: object
  *             properties:
  *               value:
- *                 type: string
+ *                 type: number
+ *                 description: "Valor numérico de la moneda (por ejemplo 500 o 3.5)."
+ *               config:
+ *                 type: object
+ *                 description: "Opcional. Configuración para aplicar cambios en los costos de productos."
+ *                 properties:
+ *                   isCambioCostosProductos:
+ *                     type: boolean
+ *                     description: "Si es true, actualizará los costos de todos los productos según `tipo`."
+ *                   tipo:
+ *                     type: string
+ *                     description: "Tipo de cambio a aplicar: 'cambiar usd' o 'cambiar cup'."
+ *                     enum: ["cambiar usd", "cambiar cup"]
  *             required: [value]
  *           example:
- *             value: "S/ 3.50"
+ *             value: 500
+ *             config:
+ *               isCambioCostosProductos: true
+ *               tipo: "cambiar usd"
  *     responses:
  *       200:
  *         description: Valor de la moneda actualizado
  *       400:
- *         description: Campo `value` faltante en el body
+ *         description: Campo `value` faltante o configuración inválida en el body
  *       500:
  *         description: Error interno del servidor
  */
