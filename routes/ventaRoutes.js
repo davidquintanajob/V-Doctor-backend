@@ -539,4 +539,6 @@ router.put('/venta/:id/usuarios', authenticate(), ventaController.updateVentaUsu
  */
 router.get('/venta/medicamentoPaciente/:paciente/:tipo_medicamento', authenticate(), ventaController.getVentasMedicamentoPaciente);
 
+// Obtener ventas por comerciable
+router.get('/venta/comerciable/:id_comerciable', authenticate(), ventaController.getVentasByComerciable);
 module.exports = router;

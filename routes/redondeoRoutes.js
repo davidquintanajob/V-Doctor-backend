@@ -49,6 +49,8 @@ router.get('/redondeo', redondeoController.getRedondeo);
  *                 type: string
  *               isRedondeoFromPlus:
  *                 type: string
+ *               costoFormula:
+ *                 type: string
  *             required:
  *               - value
  *     responses:

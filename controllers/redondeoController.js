@@ -22,13 +22,24 @@ const getRedondeo = (req, res) => {
 };
 
 const updateRedondeo = (req, res) => {
-    const { value, isRedondeoFromPlus } = req.body || {};
+    const { value, isRedondeoFromPlus, costoFormula } = req.body || {};
     if (typeof value === 'undefined') {
         return res.status(400).json({ error: 'Falta el campo "value" en el body.' });
     }
+
+    const allowedFormulas = ['Promedio ponderado', 'Primero en entrar, primero en salir'];
+    let finalCostoFormula = null;
+    if (typeof costoFormula !== 'undefined' && costoFormula !== null) {
+        if (typeof costoFormula !== 'string' || !allowedFormulas.includes(costoFormula)) {
+            return res.status(400).json({ error: 'El campo "costoFormula" debe ser una de: ' + allowedFormulas.join(', ') });
+        }
+        finalCostoFormula = costoFormula;
+    }
+
     const content = {
         value: value,
-        isRedondeoFromPlus: typeof isRedondeoFromPlus === 'undefined' ? false : isRedondeoFromPlus
+        isRedondeoFromPlus: typeof isRedondeoFromPlus === 'undefined' ? false : isRedondeoFromPlus,
+        costoFormula: finalCostoFormula
     };
     fs.writeFile(redondeoFilePath, JSON.stringify(content, null, 4), 'utf8', (err) => {
         if (err) {

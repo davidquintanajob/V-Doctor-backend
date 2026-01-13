@@ -1,4 +1,5 @@
 {
     "value": "Exeso 5",
-    "isRedondeoFromPlus": "true"
+    "isRedondeoFromPlus": "false",
+    "costoFormula": "Promedio ponderado"
 }

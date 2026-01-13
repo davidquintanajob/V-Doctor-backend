@@ -312,6 +312,38 @@ const getAllEntradas = async () => {
     }
 };
 
+const getEntradasByComerciable = async (id_comerciable) => {
+    try {
+        const entradas = await Entrada.findAll({
+            where: { id_comerciable },
+            include: [
+                {
+                    model: Usuario,
+                    required: true,
+                    as: "usuario"
+                },
+                {
+                    model: Producto,
+                    required: true,
+                    as: "producto",
+                    include: [
+                        { model: Comerciable, required: true },
+                        { model: Medicamento, required: false }
+                    ]
+                }
+            ],
+            order: [['fecha', 'DESC']]
+        });
+        return entradas;
+    } catch (error) {
+        console.error("Error en getEntradasByComerciable:", error);
+        const err = new Error(error.message || 'Error interno al obtener entradas por comerciable');
+        err.errors = [error.message || 'Error interno al obtener entradas por comerciable'];
+        err.status = error.status || 500;
+        throw err;
+    }
+};
+
 module.exports = {
     getEntradaById,
     createEntrada,
@@ -319,4 +351,5 @@ module.exports = {
     deleteEntrada,
     filterEntradasPaginated,
     getAllEntradas,
+    getEntradasByComerciable,
 };

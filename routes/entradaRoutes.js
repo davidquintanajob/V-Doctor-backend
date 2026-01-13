@@ -237,4 +237,7 @@ router.post('/entrada/filter/:limit/:page', authenticate(), entradaController.fi
  */
 router.get('/entrada', authenticate(), entradaController.getAllEntradas);
 
+// Obtener entradas por comerciable
+router.get('/entrada/comerciable/:id_comerciable', authenticate(), entradaController.getEntradasByComerciable);
+
 module.exports = router;

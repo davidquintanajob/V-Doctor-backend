@@ -176,10 +176,8 @@ const deleteProducto = async (id, transaction) => {
       throw new Error("No se puede eliminar el producto porque esté ya se ha vendido.");
     }
 
-    const entrada = await Entrada.findOne({ where: { id_comerciable: id }, transaction: t });
-    if (entrada) {
-      throw new Error("No se puede eliminar el producto porque ya se ha registrado entradas.");
-    }
+    // Eliminar todas las entradas asociadas al producto dentro de la transacción
+    await Entrada.destroy({ where: { id_comerciable: id }, transaction: t });
 
     const producto = await Producto.findOne({ where: { id_comerciable: id }, transaction: t });
     if (!producto) {
@@ -252,6 +250,18 @@ const filterProductosPaginated = async (filterCriteria, limit, offset) => {
             break;
           case 'cantidad_max':
             whereClauseProducto.cantidad = { ...whereClauseProducto.cantidad, [Op.lte]: filterCriteria[key] };
+            break;
+          case 'isStockDisponible':
+            try {
+              const val = String(filterCriteria[key]).toLowerCase();
+              if (val === 'true' || val === '1') {
+                whereClauseProducto.cantidad = { ...whereClauseProducto.cantidad, [Op.gt]: 0 };
+              } else if (val === 'false' || val === '0') {
+                whereClauseProducto.cantidad = { ...whereClauseProducto.cantidad, [Op.eq]: 0 };
+              }
+            } catch (e) {
+              // ignore invalid value
+            }
             break;
           case 'precio_usd_min':
             whereClauseComerciable.precio_usd = { ...whereClauseComerciable.precio_usd, [Op.gte]: filterCriteria[key] };

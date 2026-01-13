@@ -187,6 +187,18 @@ const filterMedicamentosPaginated = async (filterCriteria, limit, offset) => {
                     case 'cantidad_max':
                         whereClauseProducto.cantidad = { ...whereClauseProducto.cantidad, [Op.lte]: filterCriteria[key] };
                         break;
+                    case 'isStockDisponible':
+                        try {
+                            const val = String(filterCriteria[key]).toLowerCase();
+                            if (val === 'true' || val === '1') {
+                                whereClauseProducto.cantidad = { ...whereClauseProducto.cantidad, [Op.gt]: 0 };
+                            } else if (val === 'false' || val === '0') {
+                                whereClauseProducto.cantidad = { ...whereClauseProducto.cantidad, [Op.eq]: 0 };
+                            }
+                        } catch (e) {
+                            // ignore invalid value
+                        }
+                        break;
                     case 'precio_usd_min':
                         whereClauseComerciable.precio_usd = { ...whereClauseComerciable.precio_usd, [Op.gte]: filterCriteria[key] };
                         break;

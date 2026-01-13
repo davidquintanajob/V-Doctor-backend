@@ -115,6 +115,16 @@ const getAllEntradas = async (req, res) => {
     }
 };
 
+const getEntradasByComerciable = async (req, res) => {
+    try {
+        const id = req.params.id_comerciable;
+        const entradas = await entradaService.getEntradasByComerciable(id);
+        res.status(200).json(entradas);
+    } catch (error) {
+        res.status(error.status || 500).json({ error: error.message, details: error.errors });
+    }
+};
+
 module.exports = {
     getEntradaById,
     createEntrada,
@@ -122,4 +132,5 @@ module.exports = {
     deleteEntrada,
     filterEntradas,
     getAllEntradas,
+    getEntradasByComerciable,
 };

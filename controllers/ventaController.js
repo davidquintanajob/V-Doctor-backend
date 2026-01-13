@@ -235,6 +235,16 @@ const getVentasMedicamentoPaciente = async (req, res) => {
   }
 };
 
+const getVentasByComerciable = async (req, res) => {
+  try {
+    const id = req.params.id_comerciable;
+    const ventas = await ventaService.getVentasByComerciable(id);
+    res.json(ventas);
+  } catch (error) {
+    res.status(500).json({ errors: [error.message] });
+  }
+};
+
 module.exports = {
   getAllVentas,
   getVentaById,
@@ -246,4 +256,5 @@ module.exports = {
   filterVentas,
   updateVentaUsuarios,
   getVentasMedicamentoPaciente,
+  getVentasByComerciable,
 };
