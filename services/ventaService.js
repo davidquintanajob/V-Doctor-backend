@@ -28,6 +28,8 @@ const getAllVentas = async () => {
           ]
         },
         { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] }
+        ,{ model: Venta, as: 'VentaRelacionada', required: false }
+        ,{ model: Venta, as: 'VentasRelacionadas', required: false }
       ]
     });
     return ventas;
@@ -51,6 +53,8 @@ const getVentaById = async (id) => {
           ]
         },
         { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] }
+        ,{ model: Venta, as: 'VentaRelacionada', required: false }
+        ,{ model: Venta, as: 'VentasRelacionadas', required: false }
       ]
     });
     return venta;
@@ -59,7 +63,7 @@ const getVentaById = async (id) => {
   }
 };
 
-const validateForeignIds = async ({ id_cliente, id_consulta, id_servicio_complejo, id_comerciable, id_usuario }) => {
+const validateForeignIds = async ({ id_cliente, id_consulta, id_servicio_complejo, id_comerciable, id_usuario, id_venta_relacionada }) => {
   const errors = [];
 
   // Validar que los IDs sean números positivos si se proporcionan
@@ -96,6 +100,15 @@ const validateForeignIds = async ({ id_cliente, id_consulta, id_servicio_complej
     } else {
       const c = await Comerciable.findByPk(id_comerciable);
       if (!c) errors.push(`Comerciable con id ${id_comerciable} no encontrado`);
+    }
+  }
+
+  if (id_venta_relacionada !== undefined && id_venta_relacionada !== null) {
+    if (isNaN(id_venta_relacionada) || parseInt(id_venta_relacionada) <= 0) {
+      errors.push('id_venta_relacionada debe ser un número positivo válido');
+    } else {
+      const ventaRel = await Venta.findByPk(id_venta_relacionada);
+      if (!ventaRel) errors.push(`Venta relacionada con id ${id_venta_relacionada} no encontrada`);
     }
   }
 
@@ -273,6 +286,14 @@ const validateUpdate = async (id, ventaData) => {
     return { valid: false, errors };
   }
 
+  // Validar que no se relacione a sí misma si se proporcionó id_venta_relacionada
+  if (ventaData.id_venta_relacionada !== undefined && ventaData.id_venta_relacionada !== null) {
+    if (!isNaN(ventaData.id_venta_relacionada) && parseInt(ventaData.id_venta_relacionada) === parseInt(id)) {
+      errors.push('Una venta no puede relacionarse consigo misma');
+      return { valid: false, errors };
+    }
+  }
+
   // Validar forma_pago si se proporciona
   if (ventaData.forma_pago && !formasDePago.includes(ventaData.forma_pago)) {
     errors.push(`Forma de pago inválida. Opciones: ${formasDePago.join(', ')}`);
@@ -430,7 +451,7 @@ const createVenta = async (ventaData) => {
 
     // Asociar usuarios
     const bulk = usuarios.map(uId => ({ id_venta: newVenta.id_venta, id_usuario: uId }));
-    await VentaUsuario.bulkCreate(bulk, { transaction: t });
+    await VentaUsuario.bulkCreate(bulk, { transaction: t, ignoreDuplicates: true });
 
     // Si el comerciable es un servicio complejo y vienen imagenes, crearlas
     if (imagenesList && Array.isArray(imagenesList) && newVenta.id_comerciable) {
@@ -456,6 +477,11 @@ const createVenta = async (ventaData) => {
     return await getVentaById(newVenta.id_venta);
   } catch (error) {
     await t.rollback();
+    console.error('Error creating Venta:', error);
+    if (error && error.name === 'SequelizeValidationError' && Array.isArray(error.errors)) {
+      const msgs = error.errors.map(e => e.message).join('; ');
+      throw new Error(msgs || 'Validation error');
+    }
     throw error;
   }
 };
@@ -509,7 +535,7 @@ const updateVenta = async (id, ventaData) => {
       // Reemplazar asociaciones
       await VentaUsuario.destroy({ where: { id_venta: id }, transaction: t });
       const bulk = usuarios.map(uId => ({ id_venta: id, id_usuario: uId }));
-      await VentaUsuario.bulkCreate(bulk, { transaction: t });
+      await VentaUsuario.bulkCreate(bulk, { transaction: t, ignoreDuplicates: true });
     }
 
     // Manejar imagenes si se proporcionaron (solo si la venta actual o la nueva referencia es servicio complejo)
@@ -708,19 +734,25 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
       { model: Usuario, required: false },
       {
         model: Comerciable, required: false, include: [
-          { model: Servicio, required: false },
+          { model: Servicio, required: false, include: [{ model: ServicioComplejo, as: 'servicio_complejo', required: false }] },
           { model: Producto, required: false, include: [{ model: Medicamento, required: false }] }
         ]
       },
       { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] }
+      ,{ model: Venta, as: 'VentaRelacionada', required: false }
+      ,{ model: Venta, as: 'VentasRelacionadas', required: false, include: 
+        {model: Comerciable, required: false, include: [
+          {model: Producto, require: false},
+          {model: Servicio, require: false}]} }
     ];
 
     // Filtro detallado
-    const detallado = filterCriteria && filterCriteria.detallado !== undefined ? filterCriteria.detallado : true;
+    const detallado = filterCriteria && filterCriteria.detallado !== undefined
+      ? (typeof filterCriteria.detallado === 'boolean' ? filterCriteria.detallado : (String(filterCriteria.detallado).toLowerCase() === 'true'))
+      : false;
+
     if (!detallado) {
-      whereClause[require('sequelize').Op.or] = [
-        { id_servicio_complejo: null }
-      ];
+      whereClause.id_venta_relacionada = null;
     }
     delete filterCriteria.detallado;
 
@@ -866,9 +898,19 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
       } else if (tipoComerciableRaw === 'medicamento' || tipoComerciableRaw === 'medicamneto') {
         filtered = filtered.filter(v => v.comerciable && v.comerciable.producto && !!v.comerciable.producto.medicamento);
       } else if (tipoComerciableRaw === 'servicio') {
-        filtered = filtered.filter(v => v.comerciable && v.comerciable.servicio && !v.servicio_complejo);
+        filtered = filtered.filter(v => {
+          const hasServicio = v.comerciable && v.comerciable.servicio;
+          const directSC = !!v.servicio_complejo;
+          const nestedSC = !!(v.comerciable && v.comerciable.servicio && v.comerciable.servicio.servicio_complejo);
+          return hasServicio && !directSC && !nestedSC;
+        });
       } else if (tipoComerciableRaw === 'servicio complejo' || tipoComerciableRaw === 'serviciocomplejo' || tipoComerciableRaw === 'servicio_complejo') {
-        filtered = filtered.filter(v => !!v.servicio_complejo);
+        filtered = filtered.filter(v => {
+          const directSC = !!v.servicio_complejo;
+          const nestedSC = !!(v.comerciable && v.comerciable.servicio && v.comerciable.servicio.servicio_complejo);
+          const byId = v.id_servicio_complejo !== undefined && v.id_servicio_complejo !== null;
+          return directSC || nestedSC || byId;
+        });
       }
 
       // Ordenar por fecha (más reciente primero) antes de paginar
@@ -902,7 +944,7 @@ const updateVentaUsuarios = async (id_venta, usuarios) => {
     // Reemplazar las asociaciones
     await VentaUsuario.destroy({ where: { id_venta: id_venta }, transaction: t });
     const bulk = usuarios.map(uId => ({ id_venta: id_venta, id_usuario: uId }));
-    await VentaUsuario.bulkCreate(bulk, { transaction: t });
+    await VentaUsuario.bulkCreate(bulk, { transaction: t, ignoreDuplicates: true });
 
     await t.commit();
     return await getVentaById(id_venta);
@@ -926,6 +968,8 @@ const getVentasByPacienteAndTipoMedicamento = async (pacienteId, tipoMedicamento
         { model: Cliente, required: false },
         { model: Usuario, required: false },
         { model: ServicioComplejo, required: false }
+        ,{ model: Venta, as: 'VentaRelacionada', required: false }
+        ,{ model: Venta, as: 'VentasRelacionadas', required: false }
       ]
     });
     return ventas;
@@ -949,6 +993,8 @@ const getVentasByComerciable = async (id_comerciable) => {
           ]
         },
         { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] }
+        ,{ model: Venta, as: 'VentaRelacionada', required: false }
+        ,{ model: Venta, as: 'VentasRelacionadas', required: false }
       ],
       order: [['fecha', 'DESC']]
     });

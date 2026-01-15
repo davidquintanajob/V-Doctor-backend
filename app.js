@@ -377,7 +377,7 @@ const startApp = async () => {
     await ServicioComplejo.sync();
     await ClientePaciente.sync();
     await Calendario.sync();
-    await Venta.sync({ alter: true });
+    await Venta.sync({ alter: false });
     await FotoServicioComplejo.sync();
     await FotoConsulta.sync();
     await VentaUsuario.sync();

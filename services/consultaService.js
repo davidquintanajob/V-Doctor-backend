@@ -54,7 +54,14 @@ const getConsultaById = async (id) => {
                 {
                   model: Servicio,
                   required: false,
-                  as: 'servicio'
+                  as: 'servicio',
+                  include: [
+                    {
+                      model: ServicioComplejo,
+                      required: false,
+                      as: "servicio_complejo"
+                    }
+                  ]
                 },
                 {
                   model: Producto,
@@ -253,7 +260,14 @@ const filterConsultasPaginated = async (filterCriteria, limit, offset) => {
               {
                 model: Servicio,
                 required: false,
-                as: 'servicio'
+                as: 'servicio',
+                include: [
+                  {
+                    model: ServicioComplejo,
+                    required: false,
+                    as: "servicio_complejo"
+                  }
+                ]
               },
               {
                 model: Producto,
