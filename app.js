@@ -10,6 +10,8 @@ const jwt = require("jsonwebtoken");
 const fs = require('fs');
 const path = require('path');
 
+// License manager
+const { SecureLicenseManager } = require('./helpers/SecureLicenseManager');
 const http = require('http');
 const WebSocket = require('ws');
 
@@ -216,6 +218,33 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs, {
   }
 }));
 
+// Middleware global para verificar la licencia en cada request
+function licenseMiddleware(req, res, next) {
+  try {
+    const status = SecureLicenseManager.checkLicense();
+    if (!status || !status.isValid) {
+      logger.error({ message: 'Acceso denegado por licencia', url: req.url, licenseMessage: status ? status.message : 'Licencia inválida' });
+      return res.status(403).json({ error: status ? status.message : 'Licencia inválida o no encontrada.' });
+    }
+
+    // Actualizar último acceso en la licencia (touch)
+    const info = SecureLicenseManager.getLicenseInfo();
+    if (info) {
+      info.lastAccess = new Date().toISOString();
+      // saveLicense es un método estático en la clase
+      SecureLicenseManager.saveLicense(info);
+    }
+
+    return next();
+  } catch (error) {
+    console.error('Error en middleware de licencia:', error);
+    return res.status(500).json({ error: 'Error interno verificando licencia.' });
+  }
+}
+
+// Registrar el middleware ANTES de las rutas para proteger los endpoints
+app.use(licenseMiddleware);
+
 // Importar modelos en ORDEN CORRECTO (modelos base primero)
 const { Usuario } = require("./models/usuario.js");
 const { Cliente } = require("./models/cliente.js");
@@ -250,6 +279,7 @@ console.log("Modelos registrados en Sequelize:", Object.keys(sequelize.models));
 // Importar rutas
 const usuarioRoutes = require('./routes/usuarioRoutes');
 const clienteRoutes = require('./routes/clienteRoutes');
+const calendarioRoutes = require('./routes/calendarioRoutes');
 
 // Configurar relaciones después de cargar todos los modelos
 function setupRelations() {
@@ -308,6 +338,7 @@ const consultaRoutes = require('./routes/consultaRoutes');
 const speechToTextRoutes = require('./routes/speechToTextRoutes');
 app.use('/', usuarioRoutes);
 app.use('/', clienteRoutes);
+app.use('/', calendarioRoutes);
 app.use('/', pacienteRoutes);
 app.use('/', consultaRoutes);
 app.use('/', clientePacienteRoutes);
@@ -390,6 +421,57 @@ const startApp = async () => {
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
       console.log(`📚 Documentación API: http://localhost:${PORT}/api-docs`);
+
+      try {
+        const licenseInfo = SecureLicenseManager.getLicenseInfo();
+        let daysLeft = null;
+
+        if (licenseInfo) {
+          const numericKeys = ['daysLeft','daysRemaining','remainingDays','dias_restantes','diasRestantes'];
+          for (const k of numericKeys) {
+            if (licenseInfo[k] != null && !isNaN(Number(licenseInfo[k]))) {
+              daysLeft = Math.floor(Number(licenseInfo[k]));
+              break;
+            }
+          }
+
+          if (daysLeft === null) {
+            const dateKeys = ['expiryDate','expirationDate','expiresAt','validUntil','valid_through','fecha_expiracion','vencimiento','expiration','expiry','endDate','end_date'];
+            let dateStr = null;
+            for (const k of dateKeys) {
+              if (licenseInfo[k]) {
+                dateStr = licenseInfo[k];
+                break;
+              }
+            }
+
+            if (!dateStr && licenseInfo.license && (licenseInfo.license.expiresAt || licenseInfo.license.expirationDate)) {
+              dateStr = licenseInfo.license.expiresAt || licenseInfo.license.expirationDate;
+            }
+
+            if (dateStr) {
+              const exp = new Date(dateStr);
+              if (!isNaN(exp)) {
+                const now = new Date();
+                const diff = exp.getTime() - now.getTime();
+                daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+              }
+            }
+          }
+        }
+
+        if (daysLeft != null) {
+          if (daysLeft >= 0) {
+            console.log(`🔒 Licencia: quedan ${daysLeft} día(s)`);
+          } else {
+            console.log(`🔒 Licencia: expirada hace ${Math.abs(daysLeft)} día(s)`);
+          }
+        } else {
+          console.log('🔒 Licencia: información de expiración no disponible.');
+        }
+      } catch (err) {
+        console.error('Error al obtener info de licencia al iniciar:', err);
+      }
     });
   } catch (error) {
     console.error("❌ Error crítico al iniciar la aplicación:", error);
