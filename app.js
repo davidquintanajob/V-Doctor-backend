@@ -336,6 +336,7 @@ const clientePacienteRoutes = require('./routes/clientePacienteRoutes');
 const pacienteRoutes = require('./routes/pacienteRoutes');
 const consultaRoutes = require('./routes/consultaRoutes');
 const speechToTextRoutes = require('./routes/speechToTextRoutes');
+const historialPesoRoutes = require('./routes/historialPesoRoutes');
 app.use('/', usuarioRoutes);
 app.use('/', clienteRoutes);
 app.use('/', calendarioRoutes);
@@ -354,6 +355,7 @@ app.use('/', fotoServicioComplejoRoutes);
 app.use('/', fotoConsultaRoutes);
 app.use('/', ventaRoutes);
 app.use('/', speechToTextRoutes);
+app.use('/', historialPesoRoutes);
 
 const server = http.createServer(app);
 
