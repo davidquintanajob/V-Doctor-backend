@@ -423,7 +423,7 @@ const startApp = async () => {
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
       console.log(`📚 Documentación API: http://localhost:${PORT}/api-docs`);
-
+      /*
       try {
         const licenseInfo = SecureLicenseManager.getLicenseInfo();
         let daysLeft = null;
@@ -474,6 +474,7 @@ const startApp = async () => {
       } catch (err) {
         console.error('Error al obtener info de licencia al iniciar:', err);
       }
+        */
     });
   } catch (error) {
     console.error("❌ Error crítico al iniciar la aplicación:", error);
