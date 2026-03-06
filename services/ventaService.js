@@ -28,8 +28,8 @@ const getAllVentas = async () => {
           ]
         },
         { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] }
-        ,{ model: Venta, as: 'VentaRelacionada', required: false }
-        ,{ model: Venta, as: 'VentasRelacionadas', required: false }
+        , { model: Venta, as: 'VentaRelacionada', required: false }
+        , { model: Venta, as: 'VentasRelacionadas', required: false }
       ]
     });
     return ventas;
@@ -53,8 +53,8 @@ const getVentaById = async (id) => {
           ]
         },
         { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] }
-        ,{ model: Venta, as: 'VentaRelacionada', required: false }
-        ,{ model: Venta, as: 'VentasRelacionadas', required: false }
+        , { model: Venta, as: 'VentaRelacionada', required: false }
+        , { model: Venta, as: 'VentasRelacionadas', required: false }
       ]
     });
     return venta;
@@ -738,12 +738,16 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
           { model: Producto, required: false, include: [{ model: Medicamento, required: false }] }
         ]
       },
-      { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] }
-      ,{ model: Venta, as: 'VentaRelacionada', required: false }
-      ,{ model: Venta, as: 'VentasRelacionadas', required: false, include: 
-        {model: Comerciable, required: false, include: [
-          {model: Producto, require: false},
-          {model: Servicio, require: false}]} }
+      { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] },
+      { model: Venta, as: 'VentaRelacionada', required: false },
+      {
+        model: Venta, as: 'VentasRelacionadas', required: false, include:
+        {
+          model: Comerciable, required: false, include: [
+            { model: Producto, required: false },
+            { model: Servicio, required: false }]
+        }
+      }
     ];
 
     // Filtro detallado
@@ -804,7 +808,6 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
 
     // Filtro por nombre de usuario
     if (filterCriteria && filterCriteria.nombre_usuario) {
-      // Buscar el índice del modelo Usuario en include
       const usuarioIndex = include.findIndex(inc => inc.model === Usuario);
       if (usuarioIndex !== -1) {
         include[usuarioIndex].where = { nombre_usuario: { [require('sequelize').Op.iLike]: `%${filterCriteria.nombre_usuario}%` } };
@@ -827,7 +830,6 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
     if (filterCriteria && filterCriteria.nombre_producto) {
       const comerciableIndex = include.findIndex(inc => inc.model === Comerciable);
       if (comerciableIndex !== -1 && include[comerciableIndex].include) {
-        // Buscar el índice de Producto dentro de include[comerciableIndex].include
         const productoIncludeIndex = include[comerciableIndex].include.findIndex(inc => inc.model === Producto);
         if (productoIncludeIndex !== -1) {
           include[comerciableIndex].include[productoIncludeIndex].where = {
@@ -878,20 +880,37 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
       if (Object.prototype.hasOwnProperty.call(filterCriteria, key)) {
         if (filterCriteria[key] === undefined || filterCriteria[key] === null) continue;
 
-        // Solo aplicamos filtro LIKE para campos directos de Venta
         if (ventaDirectFields.includes(key)) {
           whereClause[key] = { [require('sequelize').Op.iLike]: `%${String(filterCriteria[key]).toLowerCase()}%` };
         } else {
-          // Para otros campos, igualarlos exactamente (ajusta según necesidades)
           whereClause[key] = filterCriteria[key];
         }
       }
     }
 
-    // Si se proporcionó tipo_comerciable, aplicamos filtrado en memoria
-    if (tipoComerciableRaw) {
-      const allRows = await Venta.findAll({ where: whereClause, include, distinct: true, order: [['fecha', 'DESC']] });
+    // Objeto para almacenar las sumatorias
+    let totals = {
+      sumCostoCup: 0,
+      sumCantidad: 0,
+      sumPrecioCobradoEfectivoCup: 0,
+      sumPrecioOriginalEfectivoCup: 0,
+      sumPrecioCobradoTransferenciaCup: 0,
+      sumPrecioOriginalTransferenciaCup: 0,
+      sumRedondeoEfectivo: 0,
+      sumRedondeoTransferencia: 0
+    };
 
+    // ===== CASO CON FILTRO POR TIPO_COMERCIABLE (filtrado en memoria) =====
+    if (tipoComerciableRaw) {
+      // Obtener todas las filas que cumplen los filtros básicos (sin paginar)
+      const allRows = await Venta.findAll({
+        where: whereClause,
+        include,
+        distinct: true,
+        order: [['fecha', 'DESC']]
+      });
+
+      // Aplicar filtro por tipo de comerciable en memoria
       let filtered = allRows;
       if (tipoComerciableRaw === 'producto') {
         filtered = filtered.filter(v => v.comerciable && v.comerciable.producto && !v.comerciable.producto.medicamento);
@@ -913,16 +932,117 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
         });
       }
 
-      // Ordenar por fecha (más reciente primero) antes de paginar
+      // Calcular sumatorias sobre el conjunto filtrado
+      for (const venta of filtered) {
+        const cantidad = Number(venta.cantidad) || 0;
+        const costo = Number(venta.costo_producto_cup) || 0;
+        const precioCobrado = Number(venta.precio_cobrado_cup) || 0;
+        const precioOriginal = Number(venta.precio_original_comerciable_cup) || 0;
+        const redondeo = Number(venta.exedente_redondeo) || 0;
+        const formaPago = venta.forma_pago;
+
+        totals.sumCostoCup += costo * cantidad;
+        totals.sumCantidad += cantidad;
+
+        if (formaPago === 'Efectivo') {
+          totals.sumPrecioCobradoEfectivoCup += precioCobrado * cantidad;
+          totals.sumPrecioOriginalEfectivoCup += precioOriginal * cantidad;
+          totals.sumRedondeoEfectivo += redondeo;
+        } else if (formaPago === 'Transferencia') {
+          totals.sumPrecioCobradoTransferenciaCup += precioCobrado * cantidad;
+          totals.sumPrecioOriginalTransferenciaCup += precioOriginal * cantidad;
+          totals.sumRedondeoTransferencia += redondeo;
+        }
+        // Nota: Pago en línea no se incluye en estas sumas (según requerimiento)
+      }
+
+      // Ordenar y paginar
       filtered.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       const total = filtered.length;
       const off = Number(offset) || 0;
       const lim = Number(limit) || total;
       const paginated = filtered.slice(off, off + lim);
 
-      return { count: total, rows: paginated };
+      return {
+        count: total,
+        rows: paginated,
+        pagination: {
+          total,
+          limit: lim,
+          page: Math.floor(off / lim) + 1,
+          pages: Math.ceil(total / lim)
+        },
+        totals
+      };
     }
 
+    // ===== CASO SIN FILTRO POR TIPO_COMERCIABLE (todo en SQL) =====
+    // Primero, obtener los IDs de las ventas que cumplen los filtros (para evitar duplicados en sumas)
+    const ventasIds = await Venta.findAll({
+      where: whereClause,
+      include,
+      attributes: ['id_venta'],
+      distinct: true,
+      raw: true
+    });
+
+    const ids = ventasIds.map(v => v.id_venta);
+
+    // Si no hay ventas, devolver vacío con totals en cero
+    if (ids.length === 0) {
+      const result = await Venta.findAndCountAll({
+        where: whereClause,
+        limit,
+        offset,
+        include,
+        distinct: true,
+        order: [['createdAt', 'DESC']]
+      });
+      return {
+        ...result,
+        pagination: {
+          total: result.count,
+          limit: Number(limit) || result.count,
+          page: Math.floor((Number(offset) || 0) / (Number(limit) || result.count)) + 1,
+          pages: Math.ceil(result.count / (Number(limit) || result.count))
+        },
+        totals
+      };
+    }
+
+    // Calcular sumatorias mediante una consulta agregada sobre los IDs obtenidos
+    const [totalsResult] = await Venta.findAll({
+      attributes: [
+        [sequelize.fn('SUM', sequelize.literal('costo_producto_cup * cantidad')), 'sumCostoCup'],
+        [sequelize.fn('SUM', sequelize.col('cantidad')), 'sumCantidad'],
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN forma_pago = 'Efectivo' THEN precio_cobrado_cup * cantidad ELSE 0 END")), 'sumPrecioCobradoEfectivoCup'],
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN forma_pago = 'Efectivo' THEN precio_original_comerciable_cup * cantidad ELSE 0 END")), 'sumPrecioOriginalEfectivoCup'],
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN forma_pago = 'Transferencia' THEN precio_cobrado_cup * cantidad ELSE 0 END")), 'sumPrecioCobradoTransferenciaCup'],
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN forma_pago = 'Transferencia' THEN precio_original_comerciable_cup * cantidad ELSE 0 END")), 'sumPrecioOriginalTransferenciaCup'],
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN forma_pago = 'Efectivo' THEN exedente_redondeo ELSE 0 END")), 'sumRedondeoEfectivo'],
+        [sequelize.fn('SUM', sequelize.literal("CASE WHEN forma_pago = 'Transferencia' THEN exedente_redondeo ELSE 0 END")), 'sumRedondeoTransferencia']
+      ],
+      where: {
+        id_venta: {
+          [require('sequelize').Op.in]: ids
+        }
+      },
+      raw: true
+    });
+
+    // Asignar los resultados (convertir posibles null a 0)
+    totals = {
+      sumCostoCup: Number(totalsResult?.sumCostoCup) || 0,
+      sumCantidad: Number(totalsResult?.sumCantidad) || 0,
+      sumPrecioCobradoEfectivoCup: Number(totalsResult?.sumPrecioCobradoEfectivoCup) || 0,
+      sumPrecioOriginalEfectivoCup: Number(totalsResult?.sumPrecioOriginalEfectivoCup) || 0,
+      sumPrecioCobradoTransferenciaCup: Number(totalsResult?.sumPrecioCobradoTransferenciaCup) || 0,
+      sumPrecioOriginalTransferenciaCup: Number(totalsResult?.sumPrecioOriginalTransferenciaCup) || 0,
+      sumRedondeoEfectivo: Number(totalsResult?.sumRedondeoEfectivo) || 0,
+      sumRedondeoTransferencia: Number(totalsResult?.sumRedondeoTransferencia) || 0
+    };
+
+    // Consulta paginada original
     const result = await Venta.findAndCountAll({
       where: whereClause,
       limit,
@@ -932,7 +1052,16 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
       order: [['createdAt', 'DESC']]
     });
 
-    return result;
+    return {
+      ...result,
+      pagination: {
+        total: result.count,
+        limit: Number(limit) || result.count,
+        page: Math.floor((Number(offset) || 0) / (Number(limit) || result.count)) + 1,
+        pages: Math.ceil(result.count / (Number(limit) || result.count))
+      },
+      totals
+    };
   } catch (error) {
     throw error;
   }
@@ -968,8 +1097,8 @@ const getVentasByPacienteAndTipoMedicamento = async (pacienteId, tipoMedicamento
         { model: Cliente, required: false },
         { model: Usuario, required: false },
         { model: ServicioComplejo, required: false }
-        ,{ model: Venta, as: 'VentaRelacionada', required: false }
-        ,{ model: Venta, as: 'VentasRelacionadas', required: false }
+        , { model: Venta, as: 'VentaRelacionada', required: false }
+        , { model: Venta, as: 'VentasRelacionadas', required: false }
       ]
     });
     return ventas;
@@ -993,8 +1122,8 @@ const getVentasByComerciable = async (id_comerciable) => {
           ]
         },
         { model: ServicioComplejo, required: false, include: [{ model: Servicio, required: false }] }
-        ,{ model: Venta, as: 'VentaRelacionada', required: false }
-        ,{ model: Venta, as: 'VentasRelacionadas', required: false }
+        , { model: Venta, as: 'VentaRelacionada', required: false }
+        , { model: Venta, as: 'VentasRelacionadas', required: false }
       ],
       order: [['fecha', 'DESC']]
     });

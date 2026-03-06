@@ -19,12 +19,17 @@ const Tarea = sequelize.define("tarea", {
     type: DataTypes.DATE,
     allowNull: false,
   },
+  estado: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    defaultValue: 'preparado',
+  },
 }, {
   timestamps: true,
 });
 
 Tarea.associate = function (models) {
-  Tarea.belongsTo(models.Usuario, { foreignKey: { name: 'id_usuario', allowNull: false } });
+  Tarea.belongsTo(models.Usuario, { foreignKey: { name: 'id_usuario', allowNull: true } });
   Tarea.hasMany(models.HistorialTarea, { foreignKey: 'id_tarea' });
 };
 

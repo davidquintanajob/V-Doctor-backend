@@ -13,7 +13,7 @@ const path = require('path');
 // License manager
 const { SecureLicenseManager } = require('./helpers/SecureLicenseManager');
 const http = require('http');
-const WebSocket = require('ws');
+const { initSocket } = require('./helpers/socket');
 
 const app = express();
 
@@ -267,6 +267,7 @@ const { Calendario } = require("./models/calendario.js");
 const { FotoConsulta } = require("./models/foto_consulta.js");
 const { Venta } = require("./models/venta.js");
 const { FotoServicioComplejo } = require("./models/foto_servicio_complejo.js");
+const { Salida } = require("./models/salida.js")
 
 // Modelos de unión
 const { VentaUsuario } = require("./models/venta_usuario.js");
@@ -303,6 +304,7 @@ function setupRelations() {
       Venta,
       FotoServicioComplejo,
       VentaUsuario,
+      Salida,
       Calendario, // se pone al final porque depende de ServicioComplejo
     };
 
@@ -337,6 +339,8 @@ const pacienteRoutes = require('./routes/pacienteRoutes');
 const consultaRoutes = require('./routes/consultaRoutes');
 const speechToTextRoutes = require('./routes/speechToTextRoutes');
 const historialPesoRoutes = require('./routes/historialPesoRoutes');
+const salidaRoutes = require("./routes/salidaRoutes.js")
+const tareaRoutes = require('./routes/tareaRoutes');
 app.use('/', usuarioRoutes);
 app.use('/', clienteRoutes);
 app.use('/', calendarioRoutes);
@@ -356,8 +360,13 @@ app.use('/', fotoConsultaRoutes);
 app.use('/', ventaRoutes);
 app.use('/', speechToTextRoutes);
 app.use('/', historialPesoRoutes);
+app.use("/", salidaRoutes);
+app.use('/', tareaRoutes);
 
 const server = http.createServer(app);
+
+// Inicializar servidor Socket.IO reutilizable en toda la app
+initSocket(server);
 
 // Reemplaza la función startApp() existente con este código:
 const startApp = async () => {
@@ -399,7 +408,7 @@ const startApp = async () => {
     await Cliente.sync({ alter: true });
     await Paciente.sync({ alter: true });
     await Comerciable.sync();
-    await Tarea.sync();
+    await Tarea.sync({ alter: true });
     await HistorialPeso.sync();
     await Consulta.sync({ alter: true });
     await Producto.sync({ alter: true });
@@ -414,6 +423,7 @@ const startApp = async () => {
     await FotoServicioComplejo.sync();
     await FotoConsulta.sync();
     await VentaUsuario.sync();
+    await Salida.sync();
 
     console.log("✅ Tablas sincronizadas correctamente");
 
@@ -422,8 +432,7 @@ const startApp = async () => {
     // Y escucha en TODAS las interfaces de red (0.0.0.0)
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-      console.log(`📚 Documentación API: http://localhost:${PORT}/api-docs`);
-      /*
+      console.log(`📚 Documentación API: http://localhost:${PORT}/api-docs`)
       try {
         const licenseInfo = SecureLicenseManager.getLicenseInfo();
         let daysLeft = null;
@@ -474,7 +483,6 @@ const startApp = async () => {
       } catch (err) {
         console.error('Error al obtener info de licencia al iniciar:', err);
       }
-        */
     });
   } catch (error) {
     console.error("❌ Error crítico al iniciar la aplicación:", error);

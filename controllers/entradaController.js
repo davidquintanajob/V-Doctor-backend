@@ -42,6 +42,30 @@ const createEntrada = async (req, res) => {
 const updateEntrada = async (req, res) => {
     try {
         const { id } = req.params;
+        const { fecha, cantidad, costo_cup, costo_usd, id_usuario, id_comerciable, nombre_proveedor } = req.body;
+        const errors = [];
+
+        // Validaciones opcionales: solo validar si se proporcionan en la solicitud
+        if (cantidad !== undefined && !cantidad) {
+            errors.push("La cantidad debe ser mayor a 0");
+        }
+        if (costo_cup !== undefined && (costo_cup === null || costo_cup === undefined)) {
+            errors.push("El costo en CUP es inválido");
+        }
+        if (costo_usd !== undefined && (costo_usd === null || costo_usd === undefined)) {
+            errors.push("El costo en USD es inválido");
+        }
+        if (id_comerciable !== undefined && !id_comerciable) {
+            errors.push("El producto o medicamento es inválido");
+        }
+        if (id_usuario !== undefined && !id_usuario) {
+            errors.push("El usuario es inválido");
+        }
+
+        if (errors.length > 0) {
+            return res.status(400).json({ errors });
+        }
+
         const entradaActualizada = await entradaService.updateEntrada(id, req.body);
         if (!entradaActualizada) {
             return res.status(404).json({ error: 'Entrada no encontrada' });

@@ -253,7 +253,8 @@ const filterMedicamentosPaginated = async (filterCriteria, limit, offset) => {
                         }
                     ]
                 }
-            ]
+            ],
+            order: [['tipo_medicamento', 'ASC']]
         });
         return result;
     } catch (error) {

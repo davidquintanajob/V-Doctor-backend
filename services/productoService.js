@@ -37,7 +37,7 @@ const getAllProductos = async () => {
         }
       ]
     });
-    
+
     productos = result.filter(producto => !producto.medicamento);
 
     return productos;
@@ -96,7 +96,7 @@ const createProducto = async (productoData, transaction) => {
 
     const newProductoData = { ...productoData };
     newProductoData.id_comerciable = comerciable.id_comerciable;
-    
+
     const producto = await Producto.create(newProductoData, { transaction: t });
 
     if (!transaction) {
@@ -304,7 +304,8 @@ const filterProductosPaginated = async (filterCriteria, limit, offset) => {
           model: Medicamento,
           required: false,
         }
-      ]
+      ],
+      order: [['categoria', 'ASC']] // AÑADIR ESTA LÍNEA PARA ORDENAR POR CATEGORÍA
     });
 
     // Filtrar productos que NO sean medicamentos

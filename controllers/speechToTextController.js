@@ -3,6 +3,10 @@
 // ============================================
 const path = require('path');
 const fs = require('fs').promises;
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
+const os = require('os');
 
 // FORZAR la carpeta de caché ANTES de cualquier import
 const PROJECT_ROOT = path.resolve(__dirname, '..'); // Raíz del proyecto backend
@@ -30,10 +34,13 @@ const { pipeline } = require('@xenova/transformers');
 const WaveFile = require('wavefile').WaveFile;
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+const ffprobeInstaller = require('@ffprobe-installer/ffprobe');
 const { Readable } = require('stream');
 
-// Configurar ffmpeg
+// Configurar ffmpeg con rutas absolutas
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+const FFMPEG_PATH = ffmpegInstaller.path;
+const FFPROBE_PATH = ffprobeInstaller.path;
 
 // ============================================
 // 3. FUNCIÓN PARA VERIFICAR/MOVER CACHÉ EXISTENTE
@@ -42,32 +49,32 @@ async function setupModelCache() {
     try {
         // Asegurar que la carpeta existe
         await fs.mkdir(MODEL_CACHE_DIR, { recursive: true });
-        
+
         // Verificar si ya hay caché en ubicaciones predeterminadas
         const defaultCachePaths = [
             path.join(require('os').homedir(), '.cache', 'huggingface', 'hub'),
             path.join(require('os').homedir(), 'AppData', 'Local', 'huggingface'),
             path.join(require('os').tmpdir(), 'huggingface')
         ];
-        
+
         let foundExistingCache = false;
-        
+
         for (const cachePath of defaultCachePaths) {
             try {
                 await fs.access(cachePath);
                 const files = await fs.readdir(cachePath);
-                
+
                 // Buscar modelo de whisper
                 const whisperCache = files.find(f => f.includes('whisper-small') || f.includes('Xenova'));
-                
+
                 if (whisperCache) {
                     console.log(`🔍 Encontrado caché existente en: ${cachePath}`);
                     console.log(`   Modelo: ${whisperCache}`);
-                    
+
                     // Copiar a nuestra carpeta local si no existe
                     const sourceDir = path.join(cachePath, whisperCache);
                     const targetDir = path.join(MODEL_CACHE_DIR, whisperCache);
-                    
+
                     try {
                         await fs.access(targetDir);
                         console.log(`✅ Modelo ya está en caché local`);
@@ -76,7 +83,7 @@ async function setupModelCache() {
                         await copyDir(sourceDir, targetDir);
                         console.log(`✅ Caché copiada a: ${targetDir}`);
                     }
-                    
+
                     foundExistingCache = true;
                     break;
                 }
@@ -84,11 +91,11 @@ async function setupModelCache() {
                 // La carpeta no existe, continuar
             }
         }
-        
+
         if (!foundExistingCache) {
             console.log(`📭 No se encontró caché existente. Se descargará al primer uso.`);
         }
-        
+
         return MODEL_CACHE_DIR;
     } catch (error) {
         console.error('❌ Error configurando caché:', error);
@@ -100,11 +107,11 @@ async function setupModelCache() {
 async function copyDir(src, dest) {
     await fs.mkdir(dest, { recursive: true });
     const entries = await fs.readdir(src, { withFileTypes: true });
-    
+
     for (const entry of entries) {
         const srcPath = path.join(src, entry.name);
         const destPath = path.join(dest, entry.name);
-        
+
         if (entry.isDirectory()) {
             await copyDir(srcPath, destPath);
         } else {
@@ -140,17 +147,17 @@ async function getTranscriber() {
         try {
             // Asegurar que la caché está lista
             await initializeCache();
-            
+
             console.log(`⏳ Cargando modelo Whisper desde: ${MODEL_CACHE_DIR}`);
-            
+
             // Verificar contenido de la carpeta de caché
             const cacheContent = await fs.readdir(MODEL_CACHE_DIR);
-            console.log(`📁 Contenido de caché (${cacheContent.length} items):`, 
+            console.log(`📁 Contenido de caché (${cacheContent.length} items):`,
                 cacheContent.slice(0, 5).join(', '));
-            
+
             // Cargar pipeline con configuración explícita
             transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-small');
-            
+
             // Verificar dónde quedó realmente el modelo
             const finalCacheContent = await fs.readdir(MODEL_CACHE_DIR);
             if (finalCacheContent.length > 0) {
@@ -160,15 +167,15 @@ async function getTranscriber() {
             } else {
                 console.log(`⚠️  La carpeta de caché sigue vacía. El modelo está en otra ubicación.`);
             }
-            
+
         } catch (error) {
             console.error('❌ Error fatal al cargar el modelo:', error);
-            
+
             // Diagnóstico detallado
             console.log('🔍 Diagnóstico:');
             console.log('- TRANSFORMERS_CACHE:', process.env.TRANSFORMERS_CACHE);
             console.log('- Existe carpeta:', await fs.access(MODEL_CACHE_DIR).then(() => 'SÍ').catch(() => 'NO'));
-            
+
             throw error;
         }
     }
@@ -180,7 +187,7 @@ async function getFolderSize(folderPath) {
     try {
         const files = await fs.readdir(folderPath, { withFileTypes: true });
         let size = 0;
-        
+
         for (const file of files) {
             const filePath = path.join(folderPath, file.name);
             if (file.isDirectory()) {
@@ -197,50 +204,68 @@ async function getFolderSize(folderPath) {
 }
 
 // ============================================
-// 6. FUNCIONES DE TRANSCRIPCIÓN (IGUAL)
+// 6. FUNCIONES DE TRANSCRIPCIÓN (MEJORADAS)
 // ============================================
-async function transcribeWithTransformers(audioBuffer) {
+async function transcribeWithTransformers(audioBuffer, requestId = '') {
     try {
         const transcriber = await getTranscriber();
-        console.log(`🔍 Buffer recibido: ${audioBuffer.length} bytes`);
+        console.log(`[${requestId}] 🔍 Buffer recibido: ${audioBuffer.length} bytes`);
 
-        const format = detectAudioFormat(audioBuffer);
-        console.log(`📁 Formato detectado: ${format}`);
+        // 1. Guardar el buffer original en un archivo temporal
+        const tempDir = os.tmpdir();
+        const tempInput = path.join(tempDir, `audio_${Date.now()}_${requestId}.mp4`);
+        await fs.writeFile(tempInput, audioBuffer);
+        console.log(`[${requestId}] 💾 Archivo temporal guardado: ${tempInput}`);
 
-        const convertedBuffer = await new Promise((resolve, reject) => {
-            const chunks = [];
-            const audioStream = Readable.from(audioBuffer);
-            const ffmpegCmd = ffmpeg(audioStream);
+        // 2. Obtener información con FFprobe (usando ruta absoluta)
+        let codecName = 'unknown';
+        let channels = 0;
+        let sampleRate = 0;
+        let duration = 0;
+        try {
+            const { stdout } = await execPromise(
+                `"${FFPROBE_PATH}" -v error -show_entries stream=codec_name,channels,sample_rate,duration -of default=noprint_wrappers=1 "${tempInput}"`
+            );
+            console.log(`[${requestId}] 🔍 FFprobe output:\n${stdout}`);
 
-            if (format === 'mp4' || format === 'm4a') {
-                ffmpegCmd.inputFormat('mp4');
-            } else if (format === 'wav') {
-                ffmpegCmd.inputFormat('wav');
+            // Parsear la salida
+            const lines = stdout.split('\n');
+            for (const line of lines) {
+                if (line.startsWith('codec_name=')) codecName = line.split('=')[1];
+                if (line.startsWith('channels=')) channels = parseInt(line.split('=')[1], 10);
+                if (line.startsWith('sample_rate=')) sampleRate = parseInt(line.split('=')[1], 10);
+                if (line.startsWith('duration=')) duration = parseFloat(line.split('=')[1]);
             }
+            console.log(`[${requestId}] 📊 Codec: ${codecName}, Canales: ${channels}, SampleRate: ${sampleRate}, Duración: ${duration}s`);
+        } catch (ffprobeErr) {
+            console.log(`[${requestId}] ⚠️ FFprobe falló:`, ffprobeErr.message);
+        }
 
-            ffmpegCmd
-                .audioFrequency(16000)
-                .audioChannels(1)
-                .audioCodec('pcm_s16le')
-                .format('wav')
-                .on('start', (commandLine) => {
-                    console.log(`🔄 Iniciando conversión: ${commandLine}`);
-                })
-                .on('error', (err, stdout, stderr) => {
-                    console.error('❌ Error FFmpeg completo:');
-                    console.error('Mensaje:', err.message);
-                    console.error('stderr:', stderr);
-                    reject(new Error(`Error FFmpeg: ${err.message}`));
-                })
-                .on('end', () => {
-                    const result = Buffer.concat(chunks);
-                    console.log(`✅ Audio convertido: ${result.length} bytes`);
-                    resolve(result);
-                })
-                .pipe()
-                .on('data', (chunk) => chunks.push(chunk));
-        });
+        // Si la duración es muy baja, posiblemente el audio está vacío
+        if (duration < 0.5) {
+            console.log(`[${requestId}] ⚠️ Duración muy corta (${duration}s), posible audio vacío`);
+        }
 
+        // 3. Convertir con FFmpeg usando el archivo temporal como entrada (ruta absoluta)
+        const tempOutput = path.join(tempDir, `converted_${Date.now()}_${requestId}.wav`);
+        const ffmpegCmd = `"${FFMPEG_PATH}" -i "${tempInput}" -ar 16000 -ac 1 -acodec pcm_s16le -f wav "${tempOutput}" -y`;
+
+        console.log(`[${requestId}] 🔄 Ejecutando: ${ffmpegCmd}`);
+        await execPromise(ffmpegCmd);
+
+        // 4. Leer el archivo convertido
+        const convertedBuffer = await fs.readFile(tempOutput);
+        console.log(`[${requestId}] ✅ Audio convertido: ${convertedBuffer.length} bytes`);
+
+        // Limpiar archivos temporales
+        await fs.unlink(tempInput).catch(() => { });
+        await fs.unlink(tempOutput).catch(() => { });
+
+        if (convertedBuffer.length < 1000) {
+            throw new Error(`El audio convertido es demasiado pequeño (${convertedBuffer.length} bytes). Posiblemente el archivo original no contiene audio válido.`);
+        }
+
+        // 5. Continuar con el procesamiento normal (WaveFile, etc.)
         const wav = new WaveFile(convertedBuffer);
         wav.toBitDepth('32f');
 
@@ -256,7 +281,7 @@ async function transcribeWithTransformers(audioBuffer) {
 
         return output.text;
     } catch (error) {
-        console.error('❌ Error en transcribeWithTransformers:', error);
+        console.error(`[${requestId}] ❌ Error en transcribeWithTransformers:`, error);
         throw error;
     }
 }
@@ -264,12 +289,12 @@ async function transcribeWithTransformers(audioBuffer) {
 function detectAudioFormat(buffer) {
     if (buffer.length < 12) return 'unknown';
     const hex = buffer.toString('hex', 0, 12);
-    
+
     if (hex.startsWith('00000018667479706d703432')) return 'mp4';
     if (hex.startsWith('667479704d3441')) return 'm4a';
     if (hex.startsWith('52494646')) return 'wav';
     if (hex.startsWith('494433')) return 'mp3';
-    
+
     return 'unknown';
 }
 
@@ -280,17 +305,17 @@ const getServiceStatus = async (req, res) => {
     try {
         let modelStatus = 'NO_CARGADO';
         let cacheInfo = { exists: false, size: '0 MB', location: MODEL_CACHE_DIR };
-        
+
         try {
             await initializeCache();
-            
+
             // Verificar estado de la caché
             cacheInfo.exists = await fs.access(MODEL_CACHE_DIR).then(() => true).catch(() => false);
-            
+
             if (cacheInfo.exists) {
                 const files = await fs.readdir(MODEL_CACHE_DIR);
                 cacheInfo.fileCount = files.length;
-                
+
                 if (files.length > 0) {
                     const modelFolder = path.join(MODEL_CACHE_DIR, files[0]);
                     const size = await getFolderSize(modelFolder);
@@ -298,11 +323,11 @@ const getServiceStatus = async (req, res) => {
                     cacheInfo.modelFolder = files[0];
                 }
             }
-            
+
             // Intentar cargar el modelo
             const transcriber = await getTranscriber();
             modelStatus = 'CARGADO';
-            
+
         } catch (error) {
             modelStatus = `ERROR: ${error.message}`;
         }
@@ -319,7 +344,7 @@ const getServiceStatus = async (req, res) => {
                 timestamp: new Date().toISOString(),
                 note: 'El modelo se guarda en la carpeta del proyecto para fácil despliegue'
             },
-            message: modelStatus === 'CARGADO' ? 
+            message: modelStatus === 'CARGADO' ?
                 '✅ Servicio listo. Modelo en carpeta del proyecto.' :
                 '⚠️  Servicio en estado de verificación.'
         });
@@ -331,9 +356,12 @@ const getServiceStatus = async (req, res) => {
 
 const testTranscriptionFile = async (req, res) => {
     const startTime = Date.now();
-    
+    const requestId = Math.random().toString(36).substring(7); // ID único para rastrear
+    console.log(`[${requestId}] 🎤 Iniciando transcripción...`);
+
     try {
         if (!req.body?.audioBase64) {
+            console.log(`[${requestId}] ❌ No se recibió audioBase64`);
             return res.status(400).json({ success: false, error: 'Se requiere audioBase64' });
         }
 
@@ -342,14 +370,19 @@ const testTranscriptionFile = async (req, res) => {
             audioBase64 = audioBase64.split('base64,')[1];
         }
 
+        console.log(`[${requestId}] 📦 Longitud base64: ${audioBase64.length} caracteres`);
         const buffer = Buffer.from(audioBase64, 'base64');
-        
-        console.log('🎤 Iniciando transcripción...');
-        const transcription = await transcribeWithTransformers(buffer);
+        console.log(`[${requestId}] 📦 Tamaño del buffer: ${buffer.length} bytes`);
+
+        const format = detectAudioFormat(buffer);
+        console.log(`[${requestId}] 📁 Formato detectado: ${format}`);
+
+        const transcription = await transcribeWithTransformers(buffer, requestId);
         const processingTime = Date.now() - startTime;
 
-        console.log(`✅ Transcripción completada en ${processingTime}ms`);
-        
+        console.log(`[${requestId}] ✅ Transcripción completada en ${processingTime}ms`);
+        console.log(`[${requestId}] 📝 Texto: "${transcription}"`);
+
         res.status(200).json({
             success: true,
             data: {
@@ -361,11 +394,12 @@ const testTranscriptionFile = async (req, res) => {
                 cacheLocation: MODEL_CACHE_DIR
             }
         });
-        
+
     } catch (error) {
         const processingTime = Date.now() - startTime;
-        console.error('❌ Error en testTranscriptionFile:', error);
-        
+        console.error(`[${requestId}] ❌ Error en testTranscriptionFile:`, error);
+        console.error(`[${requestId}] Stack:`, error.stack);
+
         res.status(500).json({
             success: false,
             error: 'Error en la transcripción',
@@ -379,15 +413,15 @@ const testInstallation = async (req, res) => {
     try {
         let modelLoadResult = { success: false };
         let cacheDetails = { location: MODEL_CACHE_DIR, exists: false, content: [] };
-        
+
         try {
             await initializeCache();
             cacheDetails.exists = await fs.access(MODEL_CACHE_DIR).then(() => true).catch(() => false);
-            
+
             if (cacheDetails.exists) {
                 cacheDetails.content = await fs.readdir(MODEL_CACHE_DIR);
             }
-            
+
             const transcriber = await getTranscriber();
             modelLoadResult = { success: true, status: 'FUNCIONAL' };
         } catch (error) {
@@ -410,8 +444,8 @@ const testInstallation = async (req, res) => {
                 cacheDetails: cacheDetails,
                 modelLoadTest: modelLoadResult,
                 system: { platform: process.platform, arch: process.arch, node: process.version },
-                summary: modelLoadResult.success ? 
-                    '✅ Sistema completo. Modelo en carpeta del proyecto.' : 
+                summary: modelLoadResult.success ?
+                    '✅ Sistema completo. Modelo en carpeta del proyecto.' :
                     '❌ Instalación incompleta.',
                 deploymentInstructions: [
                     `1. La carpeta '${MODEL_CACHE_DIR}' contiene el modelo.`,

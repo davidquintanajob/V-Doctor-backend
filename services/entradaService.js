@@ -82,23 +82,49 @@ const updateEntrada = async (id, entradaData) => {
             throw error;
         }
 
-        const producto = await productoService.getProductoById(entrada.id_comerciable, t);
-        if (!producto) {
-            throw new Error(`El producto o medicamento no existe.`);
+        // Obtener el producto actual
+        const productoActual = await productoService.getProductoById(entrada.id_comerciable, t);
+        if (!productoActual) {
+            throw new Error(`El producto o medicamento asociado no existe.`);
         }
 
+        // Determinar valores anteriores y nuevos
         const cantidadOriginal = entrada.cantidad;
         const cantidadNueva = entradaData.cantidad !== undefined ? entradaData.cantidad : cantidadOriginal;
-        const diferenciaCantidad = cantidadNueva - cantidadOriginal;
+        const id_comerciableOriginal = entrada.id_comerciable;
+        const id_comerciableNuevo = entradaData.id_comerciable !== undefined ? entradaData.id_comerciable : id_comerciableOriginal;
 
-        if (diferenciaCantidad !== 0) {
-            const nuevaCantidadProducto = producto.cantidad + diferenciaCantidad;
-            if (nuevaCantidadProducto < 0) {
-                throw new Error(`No hay suficiente cantidad para realizar el ajuste. Cantidad actual: ${producto.cantidad}, se intentar restar: ${-diferenciaCantidad}`);
+        // CASO 1: Cambió el producto
+        if (id_comerciableNuevo !== id_comerciableOriginal) {
+            // Obtener el nuevo producto
+            const productoNuevo = await productoService.getProductoById(id_comerciableNuevo, t);
+            if (!productoNuevo) {
+                throw new Error(`El nuevo producto o medicamento proporcionado no existe.`);
             }
-            await producto.update({ cantidad: nuevaCantidadProducto }, { transaction: t });
+
+            // Restar la cantidad del producto anterior (esa entrada ya no le pertenece)
+            const cantidadProductoActualAjustada = productoActual.cantidad - cantidadOriginal;
+            if (cantidadProductoActualAjustada < 0) {
+                throw new Error(`No hay suficiente cantidad en el producto actual para desvincular la entrada. Cantidad actual: ${productoActual.cantidad}, se intenta restar: ${cantidadOriginal}`);
+            }
+            await productoActual.update({ cantidad: cantidadProductoActualAjustada }, { transaction: t });
+
+            // Sumar la cantidad al nuevo producto (ahora esa entrada le pertenece)
+            const cantidadProductoNuevo = productoNuevo.cantidad + cantidadNueva;
+            await productoNuevo.update({ cantidad: cantidadProductoNuevo }, { transaction: t });
+        }
+        // CASO 2: Solo cambió la cantidad
+        else if (cantidadNueva !== cantidadOriginal) {
+            const diferenciaCantidad = cantidadNueva - cantidadOriginal;
+            const nuevaCantidadProducto = productoActual.cantidad + diferenciaCantidad;
+            
+            if (nuevaCantidadProducto < 0) {
+                throw new Error(`No hay suficiente cantidad para realizar el ajuste. Cantidad actual: ${productoActual.cantidad}, se intenta restar: ${-diferenciaCantidad}`);
+            }
+            await productoActual.update({ cantidad: nuevaCantidadProducto }, { transaction: t });
         }
 
+        // Actualizar la entrada con los nuevos datos
         await entrada.update(entradaData, { transaction: t });
 
         await t.commit();
@@ -129,7 +155,9 @@ const deleteEntrada = async (id) => {
 
         const nuevaCantidad = producto.cantidad - entrada.cantidad;
         if (nuevaCantidad < 0) {
-            throw new Error(`No hay suficiente stock para eliminar la entrada. Stock actual: ${producto.cantidad}, se intentar restar: ${entrada.cantidad}`);
+            const error = new Error(`No hay suficiente stock para eliminar la entrada. Stock actual: ${producto.cantidad}, se intenta restar: ${entrada.cantidad}`);
+            error.status = 400;
+            throw error;
         }
         await producto.update({ cantidad: nuevaCantidad }, { transaction: t });
 

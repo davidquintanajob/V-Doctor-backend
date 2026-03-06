@@ -3,6 +3,7 @@ const usuarioService = require('../services/usuarioService');
 const bcrypt = require('bcrypt');
 const { roles, Usuario } = require("../models/usuario");
 const jwt = require("jsonwebtoken");
+const { getIO } = require('../helpers/socket');
 
 const getAllUsuarios = async (req, res) => {
     try {
@@ -273,7 +274,7 @@ const login = async (req, res) => {
                 rol: usuario.rol
             },
             process.env.JWT_SECRET,
-            { expiresIn: '3h' }
+            { expiresIn: '8h' }
         );
 
         const refreshToken = jwt.sign({ userId: usuario.id_usuario }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: '24h' });
@@ -288,6 +289,20 @@ const login = async (req, res) => {
             token: token,
             refreshToken
         };
+
+        // Emitir evento de login por Socket.IO (útil para paneles en tiempo real)
+        try {
+            const io = getIO();
+            io.emit('usuario:login', {
+                id_usuario: usuario.id_usuario,
+                nombre: usuario.nombre_natural,
+                nombre_usuario: usuario.nombre_usuario,
+                rol: usuario.rol,
+                fecha: new Date().toISOString(),
+            });
+        } catch (socketError) {
+            console.error('Error al emitir evento de login por Socket.IO:', socketError.message);
+        }
 
         return res.status(200).json(respuesta);
     } catch (error) {

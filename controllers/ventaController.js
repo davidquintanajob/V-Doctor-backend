@@ -180,14 +180,19 @@ const filterVentas = async (req, res) => {
     const offset = (page - 1) * limit;
     
     const result = await ventaService.filterVentasPaginated(req.body, limit, offset);
+    
+    // Usamos la paginación proporcionada por el servicio o la recalculamos
+    const pagination = result.pagination || {
+      total: result.count,
+      limit,
+      page,
+      pages: Math.ceil(result.count / limit)
+    };
+
     res.json({
       data: result.rows,
-      pagination: {
-        total: result.count,
-        limit,
-        page,
-        pages: Math.ceil(result.count / limit)
-      }
+      pagination,
+      totals: result.totals // ← Nuevo campo con las sumatorias
     });
   } catch (error) {
     res.status(500).json({ errors: [error.message] });
