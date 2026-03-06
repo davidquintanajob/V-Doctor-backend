@@ -341,6 +341,7 @@ const speechToTextRoutes = require('./routes/speechToTextRoutes');
 const historialPesoRoutes = require('./routes/historialPesoRoutes');
 const salidaRoutes = require("./routes/salidaRoutes.js")
 const tareaRoutes = require('./routes/tareaRoutes');
+const logsRoutes = require('./routes/logsRoutes');
 app.use('/', usuarioRoutes);
 app.use('/', clienteRoutes);
 app.use('/', calendarioRoutes);
@@ -362,6 +363,7 @@ app.use('/', speechToTextRoutes);
 app.use('/', historialPesoRoutes);
 app.use("/", salidaRoutes);
 app.use('/', tareaRoutes);
+app.use('/', logsRoutes);
 
 const server = http.createServer(app);
 

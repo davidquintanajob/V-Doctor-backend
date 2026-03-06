@@ -271,6 +271,7 @@ const login = async (req, res) => {
                 userId: usuario.id_usuario,
                 nombre: usuario.nombre_natural,
                 nombre_usuario: usuario.nombre_usuario,
+                salario_diario: usuario.salario_diario,
                 rol: usuario.rol
             },
             process.env.JWT_SECRET,
@@ -284,6 +285,7 @@ const login = async (req, res) => {
                 id_usuario: usuario.id_usuario,
                 nombre: usuario.nombre_natural,
                 nombre_usuario: usuario.nombre_usuario,
+                salario_diario: usuario.salario_diario,
                 rol: usuario.rol
             },
             token: token,
@@ -297,6 +299,7 @@ const login = async (req, res) => {
                 id_usuario: usuario.id_usuario,
                 nombre: usuario.nombre_natural,
                 nombre_usuario: usuario.nombre_usuario,
+                salario_diario: usuario.salario_diario,
                 rol: usuario.rol,
                 fecha: new Date().toISOString(),
             });
