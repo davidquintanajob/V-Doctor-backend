@@ -16,7 +16,7 @@ const filterLogs = async (req, res) => {
       });
     }
 
-    const logs = await filterLogsByCriteria({
+    const result = await filterLogsByCriteria({
       fecha_desde,
       fecha_hasta,
       metodo,
@@ -24,10 +24,7 @@ const filterLogs = async (req, res) => {
       urls
     });
 
-    return res.status(200).json({
-      total: logs.length,
-      data: logs
-    });
+    return res.status(200).json(result);
   } catch (error) {
     console.error('Error en filterLogs controller:', error);
     const status = error.status || 500;
@@ -43,7 +40,7 @@ const filterLogs = async (req, res) => {
   }
 };
 
+// ✅ Verifica que esto esté al final del archivo
 module.exports = {
   filterLogs
 };
-

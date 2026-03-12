@@ -152,7 +152,7 @@ async function getTranscriber() {
 
             // Verificar contenido de la carpeta de caché
             const cacheContent = await fs.readdir(MODEL_CACHE_DIR);
-            console.log(`📁 Contenido de caché (${cacheContent.length} items):`,
+            console.log(`📁 Contenido de caché (${cacheContent.length} items):`, 
                 cacheContent.slice(0, 5).join(', '));
 
             // Cargar pipeline con configuración explícita
@@ -204,7 +204,7 @@ async function getFolderSize(folderPath) {
 }
 
 // ============================================
-// 6. FUNCIONES DE TRANSCRIPCIÓN (MEJORADAS)
+// 6. FUNCIÓN DE TRANSCRIPCIÓN (VERSIÓN ROBUSTA CON ARCHIVOS TEMPORALES)
 // ============================================
 async function transcribeWithTransformers(audioBuffer, requestId = '') {
     try {
@@ -217,7 +217,7 @@ async function transcribeWithTransformers(audioBuffer, requestId = '') {
         await fs.writeFile(tempInput, audioBuffer);
         console.log(`[${requestId}] 💾 Archivo temporal guardado: ${tempInput}`);
 
-        // 2. Obtener información con FFprobe (usando ruta absoluta)
+        // 2. Obtener información con FFprobe (usando ruta absoluta) - opcional, mejora el diagnóstico
         let codecName = 'unknown';
         let channels = 0;
         let sampleRate = 0;

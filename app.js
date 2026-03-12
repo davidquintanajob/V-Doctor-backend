@@ -7,6 +7,7 @@ const swaggerJsdoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
 require('dotenv').config();
 const jwt = require("jsonwebtoken");
+const notifier = require('node-notifier'); // Para notificaciones en Windows
 const fs = require('fs');
 const path = require('path');
 
@@ -16,6 +17,70 @@ const http = require('http');
 const { initSocket } = require('./helpers/socket');
 
 const app = express();
+
+// ===== NUEVA FUNCIÓN PARA NOTIFICACIONES EN WINDOWS =====
+function showWindowsNotification(licenseInfo) {
+  // Solo ejecutar en Windows
+  if (process.platform !== 'win32') {
+    console.log('🔔 Notificación solo disponible en Windows');
+    return;
+  }
+
+  const daysLeft = licenseInfo.daysLeft;
+  let title = '🔒 Estado de Licencia API';
+  let message = '';
+  let sound = true;
+
+  // Manejar diferentes casos
+  if (licenseInfo.error) {
+    title = '❌ Error de Licencia';
+    message = licenseInfo.errorMsg || 'Error al verificar la licencia';
+    sound = true;
+  }
+  else if (daysLeft != null) {
+    if (daysLeft >= 0) {
+      if (daysLeft <= 3) {
+        title = '⚠️ Licencia por expirar (URGENTE)';
+        message = `¡URGENTE! Quedan solo ${daysLeft} día(s) de licencia`;
+        sound = true;
+      } else if (daysLeft <= 7) {
+        title = '⚠️ Licencia próxima a expirar';
+        message = `Quedan ${daysLeft} día(s) de licencia. Considera renovar.`;
+        sound = true;
+      } else {
+        title = '✅ Licencia Activa';
+        message = `Licencia válida: quedan ${daysLeft} día(s)`;
+        sound = false;
+      }
+    } else {
+      title = '❌ Licencia Expirada';
+      message = `Licencia expirada hace ${Math.abs(daysLeft)} día(s)`;
+      sound = true;
+    }
+  } else {
+    title = '⚠️ Información no disponible';
+    message = 'No se pudo obtener información de la licencia';
+    sound = false;
+  }
+
+  // Ruta absoluta al icono (debe estar en la misma carpeta que este archivo)
+  const iconPath = path.join(__dirname, 'logo.ico');
+
+  // Enviar notificación
+  notifier.notify({
+    title: title,
+    message: message,
+    sound: sound,
+    wait: false,
+    timeout: 10,
+    icon: iconPath,
+    appID: 'API Licencia'
+  });
+
+  // También mostrar en consola
+  console.log(`🔔 ${title}: ${message}`);
+}
+// ===== FIN DE LA NUEVA FUNCIÓN =====
 
 // ✅ AGREGAR ESTO: Configurar límite de tamaño para JSON (ej: 50MB)
 app.use(express.json({ limit: '50mb' }));
@@ -403,6 +468,54 @@ const startApp = async () => {
 
     // Establecer relaciones antes de sincronizar
     setupRelations();
+    // ===== SECCIÓN MODIFICADA PARA NOTIFICACIONES =====
+    // Verificar licencia al iniciar la aplicación e imprimir días restantes
+    try {
+      // Obtener información real de la licencia usando SecureLicenseManager
+      const licenseInfo = SecureLicenseManager.getLicenseInfo();
+
+      if (licenseInfo && typeof licenseInfo.remainingDays !== 'undefined') {
+        const daysLeft = licenseInfo.remainingDays;
+
+        // Mensaje original en consola
+        if (daysLeft != null) {
+          if (daysLeft >= 0) {
+            console.log(`🔒 Licencia: quedan ${daysLeft} día(s)`);
+          } else {
+            console.log(`🔒 Licencia: expirada hace ${Math.abs(daysLeft)} día(s)`);
+          }
+        } else {
+          console.log('🔒 Licencia: información de expiración no disponible.');
+        }
+
+        // Mostrar notificación en Windows con los días reales
+        showWindowsNotification({ daysLeft });
+
+      } else if (licenseInfo && licenseInfo.error) {
+        // Si el objeto licenseInfo contiene un error
+        console.error('Error de licencia:', licenseInfo.error);
+        showWindowsNotification({
+          daysLeft: null,
+          error: true,
+          errorMsg: licenseInfo.error
+        });
+      } else {
+        console.error('No se encontró o no se pudo leer la licencia al iniciar.');
+        showWindowsNotification({
+          daysLeft: null,
+          error: true,
+          errorMsg: 'No se pudo leer la licencia'
+        });
+      }
+    } catch (err) {
+      console.error('Error al verificar la licencia inicial:', err);
+      showWindowsNotification({
+        daysLeft: null,
+        error: true,
+        errorMsg: err.message
+      });
+    }
+    // ===== FIN DE SECCIÓN MODIFICADA =====
 
     // Sincronizar modelos con la base de datos en orden de dependencia
     // Usar `alter: true` para aplicar cambios no destructivos en el esquema del modelo
@@ -440,7 +553,7 @@ const startApp = async () => {
         let daysLeft = null;
 
         if (licenseInfo) {
-          const numericKeys = ['daysLeft','daysRemaining','remainingDays','dias_restantes','diasRestantes'];
+          const numericKeys = ['daysLeft', 'daysRemaining', 'remainingDays', 'dias_restantes', 'diasRestantes'];
           for (const k of numericKeys) {
             if (licenseInfo[k] != null && !isNaN(Number(licenseInfo[k]))) {
               daysLeft = Math.floor(Number(licenseInfo[k]));
@@ -449,7 +562,7 @@ const startApp = async () => {
           }
 
           if (daysLeft === null) {
-            const dateKeys = ['expiryDate','expirationDate','expiresAt','validUntil','valid_through','fecha_expiracion','vencimiento','expiration','expiry','endDate','end_date'];
+            const dateKeys = ['expiryDate', 'expirationDate', 'expiresAt', 'validUntil', 'valid_through', 'fecha_expiracion', 'vencimiento', 'expiration', 'expiry', 'endDate', 'end_date'];
             let dateStr = null;
             for (const k of dateKeys) {
               if (licenseInfo[k]) {
