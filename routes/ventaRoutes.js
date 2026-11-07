@@ -456,6 +456,10 @@ router.delete('/venta/delete/:id', authenticate(), ventaController.deleteVenta);
  *                 type: number
  *               nota:
  *                 type: string
+ *               is_pendiente:
+ *                 type: boolean
+ *                 default: false
+ *                 description: Indica si la venta queda pendiente. Si no se envía, será false.
  *               forma_pago:
  *                 type: string
  *               tipo_comerciable:

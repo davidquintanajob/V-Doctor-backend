@@ -22,7 +22,7 @@ const getTareaById = async (req, res) => {
 
 const createTarea = async (req, res) => {
   try {
-    const { titulo, descripcion, fecha_creacion, estado, id_usuario } = req.body;
+    const { titulo, descripcion, fecha_creacion, fecha_limite, estado, id_usuario } = req.body;
     const errors = [];
 
     if (!titulo) errors.push('titulo es requerido');
@@ -34,6 +34,7 @@ const createTarea = async (req, res) => {
       titulo,
       descripcion,
       fecha_creacion,
+      fecha_limite,
       estado,
       id_usuario
     };
@@ -51,7 +52,7 @@ const createTarea = async (req, res) => {
 const updateTarea = async (req, res) => {
   try {
     const { id } = req.params;
-    const { titulo, descripcion, fecha_creacion, estado, id_usuario } = req.body;
+    const { titulo, descripcion, fecha_creacion, fecha_limite, estado, id_usuario } = req.body;
     const errors = [];
 
     // Validaciones opcionales para actualización
@@ -64,6 +65,7 @@ const updateTarea = async (req, res) => {
       titulo,
       descripcion,
       fecha_creacion,
+      fecha_limite,
       estado,
       id_usuario
     };

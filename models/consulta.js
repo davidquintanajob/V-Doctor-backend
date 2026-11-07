@@ -31,6 +31,15 @@ const Consulta = sequelize.define("consulta", {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  is_pendiente: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true,
+  },
+  temperatura: {               // NUEVO CAMPO
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   id_paciente: {
     type: DataTypes.INTEGER,
     allowNull: false,
@@ -56,9 +65,9 @@ Consulta.associate = function (models) {
   Consulta.belongsTo(models.Usuario, { foreignKey: 'id_usuario' });
   Consulta.hasMany(models.Venta, { foreignKey: 'id_consulta' });
   Consulta.hasMany(models.FotoConsulta, { 
-  foreignKey: 'id_consulta',
-  onDelete: 'CASCADE' // Importante para consistencia
-});
+    foreignKey: 'id_consulta',
+    onDelete: 'CASCADE'
+  });
 };
 
 module.exports = { Consulta };

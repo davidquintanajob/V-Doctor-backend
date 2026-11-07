@@ -13,6 +13,62 @@ const sequelize = require('../helpers/database');
 const { FotoServicioComplejo } = require('../models/foto_servicio_complejo');
 const fs = require('fs').promises;
 const path = require('path');
+const { getIO } = require('../helpers/socket');
+
+const parseBooleanValue = (value, fieldName, errors = []) => {
+  if (value === undefined || value === null || value === '') {
+    return false;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+
+  errors.push(`${fieldName} debe ser un valor booleano`);
+  return false;
+};
+
+const emitVentaPendienteNotification = async (venta) => {
+  try {
+    if (!venta || venta.is_pendiente !== true) {
+      return;
+    }
+
+    const io = getIO();
+    const usuarios = venta.usuarios && venta.usuarios.length ? venta.usuarios : await venta.getUsuarios();
+    const userIds = [...new Set((usuarios || []).map(usuario => usuario.id_usuario).filter(Boolean))];
+
+    if (userIds.length === 0) {
+      return;
+    }
+
+    const payload = {
+      type: 'venta_pendiente',
+      message: 'La venta quedó marcada como pendiente.',
+      venta: {
+        id_venta: venta.id_venta,
+        is_pendiente: venta.is_pendiente,
+        fecha: venta.fecha,
+        id_cliente: venta.id_cliente,
+        id_consulta: venta.id_consulta,
+        id_servicio_complejo: venta.id_servicio_complejo,
+        id_comerciable: venta.id_comerciable,
+      }
+    };
+
+    for (const userId of userIds) {
+      io.to(`user:${userId}`).emit('venta:pendiente', payload);
+    }
+  } catch (error) {
+    console.error('Error al enviar notificación WebSocket de venta pendiente:', error.message);
+  }
+};
 
 const getAllVentas = async () => {
   try {
@@ -208,6 +264,13 @@ const validateProductoQuantity = async (id_comerciable, cantidadVenta) => {
 const validateCreate = async (ventaData) => {
   const errors = [];
 
+  if (ventaData.is_pendiente !== undefined && ventaData.is_pendiente !== null && ventaData.is_pendiente !== '') {
+    const parsedPendiente = parseBooleanValue(ventaData.is_pendiente, 'is_pendiente', errors);
+    if (parsedPendiente !== false && typeof parsedPendiente !== 'boolean') {
+      errors.push('is_pendiente debe ser un valor booleano');
+    }
+  }
+
   // Validar campos obligatorios
   const requiredFields = ['fecha', 'precio_original_comerciable_cup', 'precio_original_comerciable_usd', 'cantidad', 'precio_cobrado_cup', 'forma_pago'];
   const missing = requiredFields.filter(f => ventaData[f] === undefined || ventaData[f] === null || ventaData[f] === '');
@@ -278,6 +341,13 @@ const validateCreate = async (ventaData) => {
 
 const validateUpdate = async (id, ventaData) => {
   const errors = [];
+
+  if (ventaData.is_pendiente !== undefined && ventaData.is_pendiente !== null && ventaData.is_pendiente !== '') {
+    const parsedPendiente = parseBooleanValue(ventaData.is_pendiente, 'is_pendiente', errors);
+    if (parsedPendiente !== false && typeof parsedPendiente !== 'boolean') {
+      errors.push('is_pendiente debe ser un valor booleano');
+    }
+  }
 
   // Validar que venta existe
   const venta = await Venta.findByPk(id);
@@ -429,8 +499,15 @@ const createVenta = async (ventaData) => {
     // Separar imagenes (si vienen)
     const imagenesList = ventaData.imagenes_servicio_complejo;
 
+    const normalizedVentaData = { ...ventaData };
+    if (normalizedVentaData.is_pendiente === undefined || normalizedVentaData.is_pendiente === null || normalizedVentaData.is_pendiente === '') {
+      normalizedVentaData.is_pendiente = false;
+    } else if (typeof normalizedVentaData.is_pendiente === 'string') {
+      normalizedVentaData.is_pendiente = normalizedVentaData.is_pendiente.trim().toLowerCase() === 'true';
+    }
+
     // Crear venta excluyendo id_usuario y las imagenes (tabla pivot)
-    const toCreate = { ...ventaData };
+    const toCreate = { ...normalizedVentaData };
     delete toCreate.id_usuario;
     delete toCreate.imagenes_servicio_complejo;
 
@@ -474,7 +551,13 @@ const createVenta = async (ventaData) => {
     }
 
     await t.commit();
-    return await getVentaById(newVenta.id_venta);
+
+    const createdVenta = await getVentaById(newVenta.id_venta);
+    if (createdVenta && createdVenta.is_pendiente === true) {
+      await emitVentaPendienteNotification(createdVenta);
+    }
+
+    return createdVenta;
   } catch (error) {
     await t.rollback();
     console.error('Error creating Venta:', error);
@@ -497,6 +580,13 @@ const updateVenta = async (id, ventaData) => {
 
     const usuarios = ventaData.id_usuario !== undefined ? ventaData.id_usuario : undefined;
     const toUpdate = { ...ventaData };
+    if (toUpdate.is_pendiente !== undefined && toUpdate.is_pendiente !== null && toUpdate.is_pendiente !== '') {
+      if (typeof toUpdate.is_pendiente === 'string') {
+        toUpdate.is_pendiente = toUpdate.is_pendiente.trim().toLowerCase() === 'true';
+      }
+    } else {
+      toUpdate.is_pendiente = false;
+    }
     delete toUpdate.id_usuario;
     const imagenesList = toUpdate.imagenes_servicio_complejo;
     delete toUpdate.imagenes_servicio_complejo;
@@ -572,7 +662,13 @@ const updateVenta = async (id, ventaData) => {
     }
 
     await t.commit();
-    return await getVentaById(id);
+
+    const updatedVenta = await getVentaById(id);
+    if (updatedVenta && updatedVenta.is_pendiente === true) {
+      await emitVentaPendienteNotification(updatedVenta);
+    }
+
+    return updatedVenta;
   } catch (error) {
     await t.rollback();
     throw error;
@@ -876,6 +972,14 @@ const filterVentasPaginated = async (filterCriteria, limit, offset) => {
 
     // Filtros generales (cantidad, nota, forma_pago) - solo para campos directos de Venta
     const ventaDirectFields = ['cantidad', 'nota', 'forma_pago'];
+    if (filterCriteria && filterCriteria.is_pendiente !== undefined && filterCriteria.is_pendiente !== null && filterCriteria.is_pendiente !== '') {
+      const pendienteValue = parseBooleanValue(filterCriteria.is_pendiente, 'is_pendiente');
+      if (typeof pendienteValue === 'boolean') {
+        whereClause.is_pendiente = pendienteValue;
+      }
+      delete filterCriteria.is_pendiente;
+    }
+
     for (const key in filterCriteria) {
       if (Object.prototype.hasOwnProperty.call(filterCriteria, key)) {
         if (filterCriteria[key] === undefined || filterCriteria[key] === null) continue;

@@ -88,6 +88,11 @@ const Venta = sequelize.define("venta", {
       },
     },
   },
+  is_pendiente: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  },
   nota: {
     type: DataTypes.STRING,
     allowNull: true,

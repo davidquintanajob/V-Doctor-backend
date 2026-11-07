@@ -305,7 +305,10 @@ const filterProductosPaginated = async (filterCriteria, limit, offset) => {
           required: false,
         }
       ],
-      order: [['categoria', 'ASC']] // AÑADIR ESTA LÍNEA PARA ORDENAR POR CATEGORÍA
+      order: [
+        ['categoria', 'ASC'],  // Primero ordena por categoría
+        ['nombre', 'ASC']      // Luego dentro de cada categoría, ordena por nombre
+      ]
     });
 
     // Filtrar productos que NO sean medicamentos

@@ -51,10 +51,16 @@ const getServicioComplejoById = async (id, transaction) => {
 const createServicioComplejo = async (servicioComplejoData) => {
     const t = await sequelize.transaction();
     try {
-        const { calendario, foto_servicio_complejo, ...servicioData } = servicioComplejoData;
+        const { calendario, foto_servicio_complejo, tipo_cirugia, is_pendiente, ...servicioData } = servicioComplejoData;
 
         if (!TIPOS_SERVICIO.includes(servicioData.tipo_servicio)) {
             const error = new Error(`El tipo de servicio '${servicioData.tipo_servicio}' no es válido.`);
+            error.status = 400;
+            throw error;
+        }
+
+        if (is_pendiente !== undefined && typeof is_pendiente !== 'boolean') {
+            const error = new Error('El campo is_pendiente debe ser un valor booleano.');
             error.status = 400;
             throw error;
         }
@@ -73,6 +79,8 @@ const createServicioComplejo = async (servicioComplejoData) => {
         const newServicioComplejoData = {
             id_comerciable: servicio.id_comerciable,
             tipo_servicio: servicioData.tipo_servicio,
+            tipo_cirugia: tipo_cirugia ?? null,
+            is_pendiente: is_pendiente !== undefined ? is_pendiente : true,
         };
 
         const servicioComplejo = await ServicioComplejo.create(newServicioComplejoData, { transaction: t });
@@ -104,7 +112,7 @@ const createServicioComplejo = async (servicioComplejoData) => {
 const updateServicioComplejo = async (id, servicioComplejoData) => {
     const t = await sequelize.transaction();
     try {
-        const { calendario, foto_servicio_complejo, ...servicioData } = servicioComplejoData;
+        const { calendario, foto_servicio_complejo, tipo_cirugia, is_pendiente, ...servicioData } = servicioComplejoData;
 
         const servicioComplejo = await ServicioComplejo.findOne({ where: { id_comerciable: id }, transaction: t });
         if (!servicioComplejo) {
@@ -120,6 +128,12 @@ const updateServicioComplejo = async (id, servicioComplejoData) => {
             throw error;
         }
 
+        if (is_pendiente !== undefined && typeof is_pendiente !== 'boolean') {
+            const error = new Error('El campo is_pendiente debe ser un valor booleano.');
+            error.status = 400;
+            throw error;
+        }
+
         if (calendario) {
             const { fecha, descripcion, id_usuario } = calendario;
             if (!fecha || !descripcion || !id_usuario) {
@@ -130,7 +144,14 @@ const updateServicioComplejo = async (id, servicioComplejoData) => {
         }
 
         await servicioService.updateServicio(id, servicioData, t);
-        await servicioComplejo.update(servicioData, { transaction: t });
+        const servicioComplejoUpdateData = { ...servicioData };
+        if (tipo_cirugia !== undefined) {
+            servicioComplejoUpdateData.tipo_cirugia = tipo_cirugia;
+        }
+        if (is_pendiente !== undefined) {
+            servicioComplejoUpdateData.is_pendiente = is_pendiente;
+        }
+        await servicioComplejo.update(servicioComplejoUpdateData, { transaction: t });
 
         if (calendario) {
             await Calendario.destroy({ where: { id_comerciable_servicio_complejo: id }, transaction: t });
@@ -262,6 +283,22 @@ const filterServiciosComplejosPaginated = async (filterCriteria, limit, offset) 
                             )
                         ];
                         break;
+                    case 'tipo_cirugia':
+                         whereClauseServicioComplejo.tipo_cirugia = { [Op.iLike]: `%${filterCriteria[key]}%` };
+                         break;
+                    case 'is_pendiente': {
+                        const filterValue = filterCriteria[key];
+                        if (typeof filterValue !== 'boolean' &&
+                            (typeof filterValue !== 'string' || !['true', 'false'].includes(filterValue.toLowerCase()))) {
+                            const error = new Error('El filtro is_pendiente debe ser true o false.');
+                            error.status = 400;
+                            throw error;
+                        }
+                        whereClauseServicioComplejo.is_pendiente = typeof filterValue === 'string'
+                            ? filterValue.toLowerCase() === 'true'
+                            : filterValue;
+                        break;
+                    }
                     case 'descripcion':
                         whereClauseServicio.descripcion = { [Op.iLike]: `%${filterCriteria[key]}%` };
                         break;

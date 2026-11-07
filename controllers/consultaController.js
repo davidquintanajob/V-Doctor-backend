@@ -2,6 +2,8 @@ const consultaService = require('../services/consultaService');
 const ventaService = require('../services/ventaService');
 const { Venta } = require('../models/venta');
 
+const isValidIsPendiente = value => value === undefined || typeof value === 'boolean';
+
 const getAllConsultas = async (req, res) => {
   try {
     const consultas = await consultaService.getAllConsultas();
@@ -24,9 +26,10 @@ const getConsultaById = async (req, res) => {
 
 const createConsulta = async (req, res) => {
   try {
-    const { fecha, motivo, diagnostico, anamnesis, tratamiento, patologia, id_paciente, id_usuario } = req.body;
+    const { fecha, motivo, temperatura, diagnostico, anamnesis, tratamiento, patologia, is_pendiente, id_paciente, id_usuario } = req.body;
     const errors = [];
 
+    if (!isValidIsPendiente(is_pendiente)) errors.push('is_pendiente debe ser un valor booleano');
     if (!fecha) errors.push('fecha es requerida');
     if (!motivo) errors.push('motivo es requerido');
     if (!anamnesis) errors.push('anamnesis es requerida');
@@ -44,8 +47,10 @@ const createConsulta = async (req, res) => {
       anamnesis,
       tratamiento,
       patologia,
+      is_pendiente,
       id_paciente,
-      id_usuario
+      id_usuario,
+      temperatura
     };
 
     const newConsulta = await consultaService.createConsulta(consultaData);
@@ -61,9 +66,10 @@ const createConsulta = async (req, res) => {
 const updateConsulta = async (req, res) => {
   try {
     const { id } = req.params;
-    const { fecha, motivo, diagnostico, anamnesis, tratamiento, patologia, id_paciente, id_usuario } = req.body;
+    const { fecha, temperatura, motivo, diagnostico, anamnesis, tratamiento, patologia, is_pendiente, id_paciente, id_usuario } = req.body;
     const errors = [];
 
+    if (!isValidIsPendiente(is_pendiente)) errors.push('is_pendiente debe ser un valor booleano');
     if (id_paciente && isNaN(parseInt(id_paciente, 10))) errors.push('id_paciente debe ser un número válido');
     if (id_usuario && isNaN(parseInt(id_usuario, 10))) errors.push('id_usuario debe ser un número válido');
 
@@ -76,8 +82,10 @@ const updateConsulta = async (req, res) => {
       anamnesis,
       tratamiento,
       patologia,
+      is_pendiente,
       id_paciente,
-      id_usuario
+      id_usuario,
+      temperatura
     };
 
     const updated = await consultaService.updateConsulta(id, consultaData);
@@ -149,6 +157,13 @@ const filterConsultas = async (req, res) => {
   try {
     const { limit, page } = req.params;
     const filterCriteria = req.body || {};
+    const isPendienteFilter = filterCriteria.is_pendiente;
+
+    if (isPendienteFilter !== undefined &&
+        typeof isPendienteFilter !== 'boolean' &&
+        (typeof isPendienteFilter !== 'string' || !['true', 'false'].includes(isPendienteFilter.toLowerCase()))) {
+      return res.status(400).json({ error: 'El filtro is_pendiente debe ser true o false.' });
+    }
 
     const limitNum = parseInt(limit, 10);
     const pageNum = parseInt(page, 10);
@@ -169,10 +184,11 @@ const filterConsultas = async (req, res) => {
 // Crear consulta con lista de fotos (transaccional)
 const createConsultaWithPhotos = async (req, res) => {
   try {
-    const { fecha, motivo, diagnostico, anamnesis, tratamiento, patologia, id_paciente, id_usuario, fotos } = req.body;
+    const { temperatura, fecha, motivo, diagnostico, anamnesis, tratamiento, patologia, is_pendiente, id_paciente, id_usuario, fotos } = req.body;
     const errors = [];
 
     // Validaciones básicas
+    if (!isValidIsPendiente(is_pendiente)) errors.push('is_pendiente debe ser un valor booleano');
     if (!fecha) errors.push('fecha es requerida');
     if (!motivo) errors.push('motivo es requerido');
     if (!anamnesis) errors.push('anamnesis es requerida');
@@ -222,8 +238,10 @@ const createConsultaWithPhotos = async (req, res) => {
       motivo,
       diagnostico: diagnostico || null,
       anamnesis,
+      temperatura: temperatura || null,
       tratamiento: tratamiento || null,
       patologia: patologia || null,
+      is_pendiente,
       id_paciente: parseInt(id_paciente, 10),
       id_usuario: parseInt(id_usuario, 10)
     };
@@ -290,9 +308,10 @@ const createConsultaWithPhotos = async (req, res) => {
 const updateConsultaWithPhotos = async (req, res) => {
   try {
     const { id } = req.params;
-    const { fecha, motivo, diagnostico, anamnesis, tratamiento, patologia, id_paciente, id_usuario, fotos } = req.body;
+    const { temperatura, fecha, motivo, diagnostico, anamnesis, tratamiento, patologia, is_pendiente, id_paciente, id_usuario, fotos } = req.body;
     const errors = [];
 
+    if (!isValidIsPendiente(is_pendiente)) errors.push('is_pendiente debe ser un valor booleano');
     if (!id) errors.push('id es requerido en la ruta');
     if (id_paciente && isNaN(parseInt(id_paciente, 10))) errors.push('id_paciente debe ser un número válido');
     if (id_usuario && isNaN(parseInt(id_usuario, 10))) errors.push('id_usuario debe ser un número válido');
@@ -318,12 +337,14 @@ const updateConsultaWithPhotos = async (req, res) => {
     if (errors.length > 0) return res.status(400).json({ success: false, errors });
 
     const consultaData = {
+      temperatura: temperatura !== undefined ? temperatura : undefined,
       fecha,
       motivo,
       diagnostico: diagnostico || null,
       anamnesis,
       tratamiento: tratamiento || null,
       patologia: patologia || null,
+      is_pendiente,
       id_paciente: id_paciente !== undefined ? (id_paciente !== null ? parseInt(id_paciente, 10) : null) : undefined,
       id_usuario: id_usuario !== undefined ? (id_usuario !== null ? parseInt(id_usuario, 10) : null) : undefined
     };
@@ -370,10 +391,11 @@ const updateConsultaWithPhotos = async (req, res) => {
 const updateConsultaWithPhotosAndVentas = async (req, res) => {
   try {
     const { id } = req.params;
-    const { fecha, motivo, diagnostico, anamnesis, tratamiento, patologia, id_paciente, id_usuario, fotos, ventas } = req.body;
+    const { temperatura, fecha, motivo, diagnostico, anamnesis, tratamiento, patologia, is_pendiente, id_paciente, id_usuario, fotos, ventas } = req.body;
 
     // Validaciones básicas similares a updateConsultaWithPhotos
     const errors = [];
+    if (!isValidIsPendiente(is_pendiente)) errors.push('is_pendiente debe ser un valor booleano');
     if (!id) errors.push('id es requerido en la ruta');
     if (id_paciente && isNaN(parseInt(id_paciente, 10))) errors.push('id_paciente debe ser un número válido');
     if (id_usuario && isNaN(parseInt(id_usuario, 10))) errors.push('id_usuario debe ser un número válido');
@@ -383,12 +405,14 @@ const updateConsultaWithPhotosAndVentas = async (req, res) => {
     if (errors.length > 0) return res.status(400).json({ success: false, errors });
 
     const consultaData = {
+      temperatura: temperatura !== undefined ? temperatura : undefined,
       fecha,
       motivo,
       diagnostico: diagnostico || null,
       anamnesis,
       tratamiento: tratamiento || null,
       patologia: patologia || null,
+      is_pendiente,
       id_paciente: id_paciente !== undefined ? (id_paciente !== null ? parseInt(id_paciente, 10) : null) : undefined,
       id_usuario: id_usuario !== undefined ? (id_usuario !== null ? parseInt(id_usuario, 10) : undefined) : undefined
     };

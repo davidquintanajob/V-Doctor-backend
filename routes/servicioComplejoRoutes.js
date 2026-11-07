@@ -43,6 +43,15 @@ const upload = multer({ storage: storage });
  *         precio:
  *           type: number
  *           description: El precio del servicio complejo.
+ *         tipo_cirugia:
+ *           type: string
+ *           nullable: true
+ *           default: null
+ *           description: Tipo de cirugía asociada al servicio complejo.
+ *         is_pendiente:
+ *           type: boolean
+ *           default: true
+ *           description: Indica si el servicio complejo está pendiente.
  *         foto_servicio_complejos:
  *           type: array
  *           description: Fotos relacionadas a las ventas del servicio complejo (agregadas desde las ventas). Cada elemento contiene la ruta del archivo, la nota y el id de la venta.
@@ -105,6 +114,11 @@ const upload = multer({ storage: storage });
  *             properties:
  *               tipo_servicio:
  *                 type: string
+ *               tipo_cirugia:
+ *                 type: string
+ *                 nullable: true
+ *               is_pendiente:
+ *                 type: boolean
  *               descripcion:
  *                 type: string
  *               precio_usd_min:
@@ -204,6 +218,11 @@ router.get('/ServicioComplejo/:id', authenticate(), servicioComplejoController.g
  *                 type: string
  *               tipo_servicio:
  *                 type: string
+ *               tipo_cirugia:
+ *                 type: string
+ *                 nullable: true
+ *               is_pendiente:
+ *                 type: boolean
  *               calendario:
  *                 type: object
  *                 properties:
@@ -258,6 +277,11 @@ router.post('/ServicioComplejo/create', authenticate(), servicioComplejoControll
  *                 type: string
  *               tipo_servicio:
  *                 type: string
+ *               tipo_cirugia:
+ *                 type: string
+ *                 nullable: true
+ *               is_pendiente:
+ *                 type: boolean
  *               calendario:
  *                 type: object
  *                 properties:

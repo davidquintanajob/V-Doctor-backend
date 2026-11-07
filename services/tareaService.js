@@ -99,6 +99,7 @@ const createTarea = async (tareaData) => {
           estado: created.estado,
           id_usuario: created.id_usuario,
           fecha_creacion: created.fecha_creacion,
+          fecha_limite: created.fecha_limite,
         });
       }
     } catch (socketError) {
@@ -245,6 +246,7 @@ const updateTarea = async (id, tareaData) => {
           estado: updated.estado,
           id_usuario: updated.id_usuario,
           fecha_creacion: updated.fecha_creacion,
+          fecha_limite: updated.fecha_limite,
         });
       } else {
         console.log('WS updateTarea - no se emite porque updated o updated.id_usuario es nulo', {

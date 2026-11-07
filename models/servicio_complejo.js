@@ -15,6 +15,16 @@ const ServicioComplejo = sequelize.define("servicio_complejo", {
   tipo_servicio: {
     type: DataTypes.ENUM(...TIPOS_SERVICIO),
     allowNull: false,
+  },
+  tipo_cirugia: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: null,
+  },
+  is_pendiente: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true,
   }
 }, {
   timestamps: true,

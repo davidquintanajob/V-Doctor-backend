@@ -37,6 +37,10 @@ const authenticate = require('../helpers/authenticate');
  *                   fecha_creacion:
  *                     type: string
  *                     format: date-time
+ *                   fecha_limite:
+ *                     type: string
+ *                     format: date-time
+ *                     nullable: true
  *                   estado:
  *                     type: string
  *                   id_usuario:
@@ -96,6 +100,10 @@ router.get('/tarea/:id', authenticate(), tareaController.getTareaById);
  *               fecha_creacion:
  *                 type: string
  *                 format: date-time
+ *               fecha_limite:
+ *                 type: string
+ *                 format: date-time
+ *                 nullable: true
  *               estado:
  *                 type: string
  *                 default: preparado
@@ -107,6 +115,7 @@ router.get('/tarea/:id', authenticate(), tareaController.getTareaById);
  *             titulo: "Revisar historial médico"
  *             descripcion: "Revisar el historial médico del paciente"
  *             fecha_creacion: "2024-01-15T10:00:00Z"
+ *             fecha_limite: null
  *             estado: "preparado"
  *             id_usuario: null
  *     responses:
@@ -148,6 +157,10 @@ router.post('/tarea/Create', authenticate(), tareaController.createTarea);
  *               fecha_creacion:
  *                 type: string
  *                 format: date-time
+ *               fecha_limite:
+ *                 type: string
+ *                 format: date-time
+ *                 nullable: true
  *               estado:
  *                 type: string
  *               id_usuario:
@@ -157,6 +170,7 @@ router.post('/tarea/Create', authenticate(), tareaController.createTarea);
  *           example:
  *             titulo: "Revisar historial médico actualizado"
  *             descripcion: "Revisar el historial médico del paciente - actualizado"
+ *             fecha_limite: "2024-01-20T18:00:00Z"
  *             estado: "en_proceso"
  *             id_usuario: null
  *     responses:

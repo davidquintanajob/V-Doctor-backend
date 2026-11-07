@@ -29,12 +29,12 @@ const createMedicamento = async (req, res) => {
     const errors = [];
 
     if (!nombre) errors.push("El nombre es requerido");
-    if (!costo_usd) errors.push("El costo_usd es requerido");
-    if (!costo_cup) errors.push("El costo_cup es requerido");
+    if (costo_usd === null) errors.push("El costo_usd es requerido");
+    if (costo_cup === null) errors.push("El costo_cup es requerido");
     if (!categoria) errors.push("La categoria es requerida");
     if (!codigo) errors.push("El codigo es requerido");
-    if (!precio_usd) errors.push("El precio_usd es requerido");
-    if (!precio_cup) errors.push("El precio_cup es requerido");
+    if (precio_usd === null) errors.push("El precio_usd es requerido");
+    if (precio_cup === null) errors.push("El precio_cup es requerido");
     if (!tipo_medicamento) errors.push("El tipo_medicamento es requerido");
     if (!unidad_medida) errors.push("La unidad_medida es requerida");
 

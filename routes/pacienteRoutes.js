@@ -127,6 +127,9 @@ router.get('/paciente/:id', authenticate(), pacienteController.getPacienteById);
  *                 type: integer
  *                 minimum: 0
  *                 maximum: 100
+ *               nota:
+ *                 type: string
+ *                 description: Nota adicional sobre el paciente (opcional)
  *               imagen:
  *                 type: string
  *                 description: Base64 encoded image (opcional). Si se proporciona, se guardará automáticamente en la carpeta de fotos del paciente
@@ -142,6 +145,7 @@ router.get('/paciente/:id', authenticate(), pacienteController.getPacienteById);
  *             chip: "ABC123456"
  *             agresividad: 25
  *             descuento: 10
+ *             nota: "Paciente muy activo"
  *             imagen: null
  *     responses:
  *       201:
@@ -206,6 +210,9 @@ router.post('/paciente/Create', authenticate(), pacienteController.createPacient
  *                 type: integer
  *                 minimum: 0
  *                 maximum: 100
+ *               nota:
+ *                 type: string
+ *                 description: Nota adicional sobre el paciente
  *               imagen:
  *                 type: string
  *                 description: Base64 encoded image
@@ -371,6 +378,9 @@ router.post('/paciente/Filter/:limit/:page', authenticate(), pacienteController.
  *                 type: integer
  *                 minimum: 0
  *                 maximum: 100
+ *               nota:
+ *                 type: string
+ *                 description: Nota adicional sobre el paciente (opcional)
  *               imagen:
  *                 type: string
  *                 description: Base64 encoded image
@@ -407,6 +417,7 @@ router.post('/paciente/Filter/:limit/:page', authenticate(), pacienteController.
  *                 chip: "CH123456789"
  *                 agresividad: 20
  *                 descuento: 10
+ *                 nota: "Paciente obediente y tranquilo"
  *                 clientes:
  *                   - nombre: "Juan García"
  *                     telefono: "+56912345678"

@@ -19,10 +19,19 @@ const Tarea = sequelize.define("tarea", {
     type: DataTypes.DATE,
     allowNull: false,
   },
+  fecha_limite: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
   estado: {
     type: DataTypes.STRING,
     allowNull: false,
     defaultValue: 'preparado',
+  },
+  recordatorio_enviado: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
   },
 }, {
   timestamps: true,

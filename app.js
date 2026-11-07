@@ -10,6 +10,8 @@ const jwt = require("jsonwebtoken");
 const notifier = require('node-notifier'); // Para notificaciones en Windows
 const fs = require('fs');
 const path = require('path');
+// NUEVO: Importar Op y modelos necesarios para la verificación de tareas
+const { Op } = require("sequelize");
 
 // License manager
 const { SecureLicenseManager } = require('./helpers/SecureLicenseManager');
@@ -306,8 +308,6 @@ function licenseMiddleware(req, res, next) {
     return res.status(500).json({ error: 'Error interno verificando licencia.' });
   }
 }
-
-// Registrar el middleware ANTES de las rutas para proteger los endpoints
 app.use(licenseMiddleware);
 
 // Importar modelos en ORDEN CORRECTO (modelos base primero)
@@ -373,7 +373,6 @@ function setupRelations() {
       Calendario, // se pone al final porque depende de ServicioComplejo
     };
 
-
     // Iterar sobre los modelos y llamar a associate si existe
     for (const modelName of Object.keys(models)) {
       if (models[modelName] && models[modelName].associate) {
@@ -434,6 +433,18 @@ const server = http.createServer(app);
 
 // Inicializar servidor Socket.IO reutilizable en toda la app
 initSocket(server);
+
+// NUEVO: Obtener la instancia de io (asumiendo que socket.js la exporta)
+// Si tu socket.js no exporta io, deberás modificarlo para que lo haga.
+// Por ejemplo, en socket.js: module.exports = { initSocket, io };
+let io;
+try {
+  io = require('./helpers/socket').io;
+} catch (e) {
+  console.warn('No se pudo importar io desde socket.js. Asegúrate de que esté exportado.');
+  // Fallback: intentar obtener de global.io si se asignó allí
+  io = global.io;
+}
 
 // Reemplaza la función startApp() existente con este código:
 const startApp = async () => {
@@ -523,7 +534,7 @@ const startApp = async () => {
     await Cliente.sync({ alter: true });
     await Paciente.sync({ alter: true });
     await Comerciable.sync();
-    await Tarea.sync({ alter: true });
+    await Tarea.sync({ alter: true }); // Esto agregará el campo recordatorio_enviado si no existe
     await HistorialPeso.sync();
     await Consulta.sync({ alter: true });
     await Producto.sync({ alter: true });
@@ -531,16 +542,76 @@ const startApp = async () => {
     await Servicio.sync();
     await Medicamento.sync();
     await HistorialTarea.sync();
-    await ServicioComplejo.sync();
+    await ServicioComplejo.sync({ alter: true });
     await ClientePaciente.sync();
     await Calendario.sync();
     await Venta.sync({ alter: false });
+    await sequelize.query(
+      'ALTER TABLE "venta" ADD COLUMN IF NOT EXISTS "is_pendiente" BOOLEAN NOT NULL DEFAULT FALSE'
+    );
     await FotoServicioComplejo.sync();
     await FotoConsulta.sync();
     await VentaUsuario.sync();
     await Salida.sync();
 
     console.log("✅ Tablas sincronizadas correctamente");
+
+    // NUEVO: Iniciar la verificación periódica de tareas próximas a vencer
+    if (io) {
+      // Función que revisa las tareas y emite recordatorios
+      const checkProximasTareas = async () => {
+        try {
+          const ahora = new Date();
+          const dentroDe15Min = new Date(ahora.getTime() + 15 * 60000);
+
+          console.log(`Hora local del servidor: ${ahora.toString()}`);
+          console.log(`Hora UTC: ${ahora.toISOString()}`);
+          console.log(`Rango UTC: ${ahora.toISOString()} - ${dentroDe15Min.toISOString()}`);
+
+          const tareas = await Tarea.findAll({
+            where: {
+              fecha_limite: {
+                [Op.between]: [ahora, dentroDe15Min],
+              },
+              recordatorio_enviado: false,
+              id_usuario: { [Op.not]: null },
+            },
+          });
+
+          console.log(`   📋 Tareas encontradas: ${tareas.length}`);
+
+          for (const tarea of tareas) {
+            console.log(`   - Tarea ID: ${tarea.id_tarea}, Título: ${tarea.titulo}, Usuario: ${tarea.id_usuario}, Fecha límite: ${tarea.fecha_limite}`);
+
+            if (tarea.id_usuario) {
+              emitirRecordatorio(tarea.id_usuario, tarea);
+              await tarea.update({ recordatorio_enviado: true });
+              console.log(`     ✅ Recordatorio enviado y marcado como enviado`);
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error en checkProximasTareas:', error);
+        }
+      };
+
+      // Función para emitir recordatorio a un usuario específico
+      const emitirRecordatorio = (usuarioId, tarea) => {
+        const payload = {
+          id_tarea: tarea.id_tarea,
+          titulo: tarea.titulo,
+          fecha_limite: tarea.fecha_limite,
+          mensaje: 'Tu tarea está próxima a vencer (15 minutos)',
+        };
+        io.to(`user:${usuarioId}`).emit('tarea:recordatorio', payload);
+        console.log(`   📢 Evento 'tarea:recordatorio' emitido a user:${usuarioId} con payload:`, payload);
+      };
+
+      // Ejecutar cada minuto (60000 ms)
+      setInterval(checkProximasTareas, 60000);
+      console.log('⏰ Verificación de tareas próximas a vencer iniciada (cada 1 minuto)');
+    } else {
+      console.warn('⚠️ No se pudo obtener la instancia de io. La verificación de tareas no se iniciará.');
+    }
 
     const PORT = process.env.PORT || 4000;
     // ✅ CORRECCIÓN: Usa el SERVER que ya tiene WebSocket, no app.listen()

@@ -23,7 +23,7 @@ const getPacienteById = async (req, res) => {
 
 const createPaciente = async (req, res) => {
   try {
-    const { nombre, sexo, raza, especie, fecha_nacimiento, comprado_adoptado, historia_clinica, motivo_fallecimiento, chip, agresividad, descuento, imagen } = req.body;
+    const { nombre, sexo, raza, especie, fecha_nacimiento, comprado_adoptado, historia_clinica, motivo_fallecimiento, chip, agresividad, descuento, nota, imagen } = req.body;
     const errors = [];
 
     if (!nombre) errors.push('nombre es requerido');
@@ -52,6 +52,7 @@ const createPaciente = async (req, res) => {
       chip,
       agresividad,
       descuento,
+      nota,
       imagen
     };
 
@@ -68,7 +69,7 @@ const createPaciente = async (req, res) => {
 const updatePaciente = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, sexo, raza, especie, fecha_nacimiento, comprado_adoptado, historia_clinica, motivo_fallecimiento, chip, agresividad, descuento, imagen } = req.body;
+    const { nombre, sexo, raza, especie, fecha_nacimiento, comprado_adoptado, historia_clinica, motivo_fallecimiento, chip, agresividad, descuento, nota, imagen } = req.body;
     const errors = [];
 
     if (sexo && !['macho', 'hembra', 'otros'].includes(sexo)) errors.push('sexo inválido');
@@ -92,6 +93,7 @@ const updatePaciente = async (req, res) => {
       chip,
       agresividad,
       descuento,
+      nota,
       imagen
     };
 
@@ -143,7 +145,7 @@ const filterPacientes = async (req, res) => {
 // Crear paciente con lista de clientes (transaccional, inverso a createClienteWithPatients)
 const createPacienteWithClients = async (req, res) => {
   try {
-    const { nombre, sexo, raza, especie, fecha_nacimiento, comprado_adoptado, historia_clinica, motivo_fallecimiento, chip, agresividad, descuento, imagen, clientes } = req.body;
+    const { nombre, sexo, raza, especie, fecha_nacimiento, comprado_adoptado, historia_clinica, motivo_fallecimiento, chip, agresividad, descuento, nota, imagen, clientes } = req.body;
     const errors = [];
 
     if (!nombre) errors.push('nombre es requerido');
@@ -195,6 +197,7 @@ const createPacienteWithClients = async (req, res) => {
       chip,
       agresividad,
       descuento,
+      nota,
       imagen
     };
 

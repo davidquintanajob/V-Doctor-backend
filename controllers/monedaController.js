@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Producto } = require('../models/producto');
+const { Comerciable } = require('../models/comerciable');
 
 const monedaFilePath = path.join(__dirname, '../local_config/moneda.txt');
 
@@ -18,32 +19,13 @@ const getMoneda = (req, res) => {
 
 const updateMoneda = async (req, res) => {
     const { value, config } = req.body || {};
+
+    // Validar que el campo value esté presente
     if (typeof value === 'undefined' || value === null) {
         return res.status(400).json({ error: 'El campo `value` es requerido en el body.' });
     }
 
-    // Determine si se debe cambiar costos según config
-    const shouldChange = config && config.isCambioCostosProductos === true;
-    const tipo = config && typeof config.tipo === 'string' ? config.tipo.toLowerCase().trim() : null;
-
-    // Si se solicita cambio de costos, necesitamos un valor numérico válido
-    let numericValue = null;
-    if (shouldChange) {
-        if (typeof value === 'number') {
-            numericValue = value;
-        } else if (typeof value === 'string') {
-            const cleaned = value.replace(/[^0-9,.-]/g, '').replace(',', '.');
-            numericValue = parseFloat(cleaned);
-        }
-        if (!Number.isFinite(numericValue) || numericValue === 0) {
-            return res.status(400).json({ error: 'El campo `value` debe contener un número válido cuando `config.isCambioCostosProductos` es true.' });
-        }
-
-        if (!tipo || (tipo !== 'cambiar usd' && tipo !== 'cambiar cup')) {
-            return res.status(400).json({ error: 'El campo `config.tipo` debe ser "cambiar usd" o "cambiar cup" cuando `config.isCambioCostosProductos` es true.' });
-        }
-    }
-
+    // Escribir el nuevo valor en el archivo (siempre se actualiza)
     try {
         const toWrite = (typeof value === 'string') ? value : String(value);
         await fs.promises.writeFile(monedaFilePath, toWrite, 'utf8');
@@ -51,25 +33,46 @@ const updateMoneda = async (req, res) => {
         return res.status(500).json({ error: 'Error al escribir en el archivo de moneda.' });
     }
 
-    if (shouldChange) {
-        try {
-            const productos = await Producto.findAll();
-            const updates = productos.map(prod => {
-                const costoUsd = Number(prod.costo_usd) || 0;
-                const costoCup = Number(prod.costo_cup) || 0;
+    // Determinar si se deben actualizar los precios de los productos
+    const shouldChange = config && config.isCambioCostosProductos === true;
 
-                if (tipo === 'cambiar usd') {
-                    const nuevoUsd = Math.round((costoCup / numericValue) * 100000) / 100000;
-                    return prod.update({ costo_usd: nuevoUsd });
-                } else {
-                    // cambiar cup
-                    const nuevoCup = Math.round((costoUsd * numericValue) * 100000) / 100000;
-                    return prod.update({ costo_cup: nuevoCup });
-                }
+    if (shouldChange) {
+        // Convertir value a número para los cálculos
+        let numericValue;
+        if (typeof value === 'number') {
+            numericValue = value;
+        } else if (typeof value === 'string') {
+            const cleaned = value.replace(/[^0-9,.-]/g, '').replace(',', '.');
+            numericValue = parseFloat(cleaned);
+        } else {
+            return res.status(400).json({ error: 'El campo `value` debe ser un número válido cuando `config.isCambioCostosProductos` es true.' });
+        }
+
+        if (!Number.isFinite(numericValue) || numericValue <= 0) {
+            return res.status(400).json({ error: 'El campo `value` debe ser un número positivo cuando `config.isCambioCostosProductos` es true.' });
+        }
+
+        try {
+            // Obtener todos los productos (solo los que tienen comerciable asociado)
+            const productos = await Producto.findAll({
+                include: [{
+                    model: Comerciable,
+                    required: true
+                }]
             });
+
+            // Actualizar precio_cup de cada comerciable que sea producto
+            const updates = productos.map(async (prod) => {
+                const comerciable = prod.comerciable;
+                // Nuevo precio_cup = precio_usd * nuevo valor de la moneda
+                const nuevoPrecioCup = comerciable.precio_usd * numericValue;
+                // Solo se modifica precio_cup, el resto queda igual
+                await comerciable.update({ precio_cup: nuevoPrecioCup });
+            });
+
             await Promise.all(updates);
         } catch (err) {
-            return res.status(500).json({ error: 'Error al actualizar costos de productos.' });
+            return res.status(500).json({ error: 'Error al actualizar precios de los productos.' });
         }
     }
 

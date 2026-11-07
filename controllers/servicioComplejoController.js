@@ -12,6 +12,8 @@ const getServicioComplejoById = async (req, res) => {
         const transformed = {
             id_comerciable: servicioComplejo.id_comerciable,
             tipo_servicio: servicioComplejo.tipo_servicio,
+            tipo_cirugia: servicioComplejo.tipo_cirugia,
+            is_pendiente: servicioComplejo.is_pendiente,
             createdAt: servicioComplejo.createdAt,
             updatedAt: servicioComplejo.updatedAt,
             servicio: {
@@ -36,9 +38,15 @@ const getServicioComplejoById = async (req, res) => {
 const createServicioComplejo = async (req, res) => {
     const { roles_autorizados } = req.body;
     try {
-        const { descripcion, tipo_servicio, foto_servicio_complejo } = req.body;
+        const { descripcion, tipo_servicio, tipo_cirugia, is_pendiente, foto_servicio_complejo } = req.body;
         if (!descripcion || !tipo_servicio) {
             return res.status(400).json({ error: ['La descripción y el tipo de servicio son obligatorios.'] });
+        }
+        if (tipo_cirugia !== undefined && tipo_cirugia !== null && typeof tipo_cirugia !== 'string') {
+            return res.status(400).json({ error: ['El campo tipo_cirugia debe ser una cadena o null.'] });
+        }
+        if (is_pendiente !== undefined && typeof is_pendiente !== 'boolean') {
+            return res.status(400).json({ error: ['El campo is_pendiente debe ser un valor booleano.'] });
         }
         if (foto_servicio_complejo && !Array.isArray(foto_servicio_complejo)) {
             return res.status(400).json({ error: ['El campo foto_servicio_complejo debe ser una lista.'] });
@@ -61,7 +69,14 @@ const createServicioComplejo = async (req, res) => {
 const updateServicioComplejo = async (req, res) => {
     const { roles_autorizados } = req.body;
     try {
-        const { foto_servicio_complejo } = req.body;
+        const { foto_servicio_complejo, tipo_cirugia } = req.body;
+        const { is_pendiente } = req.body;
+        if (tipo_cirugia !== undefined && tipo_cirugia !== null && typeof tipo_cirugia !== 'string') {
+            return res.status(400).json({ error: ['El campo tipo_cirugia debe ser una cadena o null.'] });
+        }
+        if (is_pendiente !== undefined && typeof is_pendiente !== 'boolean') {
+            return res.status(400).json({ error: ['El campo is_pendiente debe ser un valor booleano.'] });
+        }
         if (foto_servicio_complejo && !Array.isArray(foto_servicio_complejo)) {
             return res.status(400).json({ error: ['El campo foto_servicio_complejo debe ser una lista.'] });
         }
@@ -93,6 +108,13 @@ const filterServiciosComplejosPaginated = async (req, res) => {
     try {
         const { limit, page } = req.params;
         const filterCriteria = req.body;
+        const isPendienteFilter = filterCriteria.is_pendiente;
+
+        if (isPendienteFilter !== undefined &&
+            typeof isPendienteFilter !== 'boolean' &&
+            (typeof isPendienteFilter !== 'string' || !['true', 'false'].includes(isPendienteFilter.toLowerCase()))) {
+            return res.status(400).json({ error: 'El filtro is_pendiente debe ser true o false.' });
+        }
 
         const limitNum = parseInt(limit, 10);
         const pageNum = parseInt(page, 10);
@@ -110,6 +132,8 @@ const filterServiciosComplejosPaginated = async (req, res) => {
         const transformedData = serviciosComplejos.map(sc => ({
             id_comerciable: sc.id_comerciable,
             tipo_servicio: sc.tipo_servicio,
+            tipo_cirugia: sc.tipo_cirugia,
+            is_pendiente: sc.is_pendiente,
             createdAt: sc.createdAt,
             updatedAt: sc.updatedAt,
             servicio: {
@@ -147,6 +171,8 @@ const getAllServiciosComplejos = async (req, res) => {
         const transformedData = serviciosComplejos.map(sc => ({
             id_comerciable: sc.id_comerciable,
             tipo_servicio: sc.tipo_servicio,
+            tipo_cirugia: sc.tipo_cirugia,
+            is_pendiente: sc.is_pendiente,
             createdAt: sc.createdAt,
             updatedAt: sc.updatedAt,
             servicio: {

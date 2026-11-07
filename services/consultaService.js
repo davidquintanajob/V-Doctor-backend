@@ -11,13 +11,14 @@ const { Comerciable } = require('../models/comerciable');
 const { Producto } = require('../models/producto');
 const { Medicamento } = require('../models/medicamento');
 const { Servicio } = require("../models/servicio");
+const { HistorialPeso } = require("../models/historial_peso")
 const { ServicioComplejo } = require("../models/servicio_complejo");
 
 const getAllConsultas = async () => {
   try {
     const consultas = await Consulta.findAll({
       include: [
-        { model: Paciente, required: false },
+        { model: Paciente, required: false, include: [ {model: HistorialPeso, require: false} ] },
         { model: FotoConsulta, required: false },
         { model: Usuario, required: false }
       ]
@@ -40,7 +41,7 @@ const getConsultaById = async (id) => {
     const consulta = await Consulta.findOne({
       where: { id_consulta: id },
       include: [
-        { model: Paciente, required: false },
+        { model: Paciente, required: false, include: [ {model: HistorialPeso, require: false} ] },
         { model: FotoConsulta, required: false },
         { model: Usuario, required: false },
         {
@@ -244,9 +245,10 @@ const deleteConsulta = async (id) => {
 
 const filterConsultasPaginated = async (filterCriteria, limit, offset) => {
   try {
+    filterCriteria = { ...filterCriteria };
     const whereClause = {};
     const include = [
-      { model: Paciente, required: false },
+      { model: Paciente, required: false, include: [ {model: HistorialPeso, require: false} ] },
       { model: FotoConsulta, required: false },
       { model: Usuario, required: false },
       {
@@ -333,6 +335,21 @@ const filterConsultasPaginated = async (filterCriteria, limit, offset) => {
         { patologia: { [Op.iLike]: `%${val}%` } }
       ];
       delete filterCriteria.descripcion;
+    }
+
+    if (filterCriteria.is_pendiente !== undefined) {
+      const filterValue = filterCriteria.is_pendiente;
+      if (typeof filterValue !== 'boolean' &&
+          (typeof filterValue !== 'string' || !['true', 'false'].includes(filterValue.toLowerCase()))) {
+        const error = new Error('El filtro is_pendiente debe ser true o false.');
+        error.status = 400;
+        throw error;
+      }
+
+      whereClause.is_pendiente = typeof filterValue === 'string'
+        ? filterValue.toLowerCase() === 'true'
+        : filterValue;
+      delete filterCriteria.is_pendiente;
     }
 
     for (const key in filterCriteria) {

@@ -31,7 +31,7 @@ const getAllServicios = async () => {
 
         // Atento a la referencia "as" que se le da al servicio complejo para hacer esto
         servicios = result.filter(servicio => !servicio.servicio_complejo);
-        
+
         return servicios;
     } catch (error) {
         console.log("Error en los servicios de getAllServicios: ", error);
@@ -222,21 +222,52 @@ const filterServiciosPaginated = async (filterCriteria, limit, offset) => {
             }
         }
 
-        const result = await Servicio.findAndCountAll({
-            where: whereClauseServicio,
-            limit,
-            offset,
+        // 1. Obtener solo los IDs de los servicios simples (sin ventas) con paginación
+        const { count, rows: idRows } = await Servicio.findAndCountAll({
+            where: {
+                ...whereClauseServicio,
+                '$servicio_complejo.id_comerciable$': { [Op.is]: null }
+            },
             include: [
                 {
                     model: Comerciable,
                     required: true,
                     where: whereClauseComerciable,
+                    as: "comerciable"
+                },
+                {
+                    model: ServicioComplejo,
+                    required: false,
+                    as: "servicio_complejo",
+                    attributes: []
+                }
+            ],
+            attributes: ['id_comerciable'], // Solo necesitamos el ID
+            limit,
+            offset,
+            subQuery: false,
+            distinct: true,
+            order: [['id_comerciable', 'ASC']]
+        });
+
+        const ids = idRows.map(row => row.id_comerciable);
+        if (ids.length === 0) {
+            return { count: 0, rows: [] };
+        }
+
+        // 2. Obtener los servicios completos con sus ventas (sin paginación)
+        const rows = await Servicio.findAll({
+            where: { id_comerciable: ids },
+            include: [
+                {
+                    model: Comerciable,
+                    required: true,
                     as: "comerciable",
                     include: [
                         {
                             model: Venta,
                             required: false,
-                            as: "venta",
+                            as: "venta"
                         }
                     ]
                 },
@@ -245,16 +276,11 @@ const filterServiciosPaginated = async (filterCriteria, limit, offset) => {
                     required: false,
                     as: "servicio_complejo"
                 }
-            ]
+            ],
+            order: [['id_comerciable', 'ASC']]
         });
 
-        // Atento a la referencia "as" que se le da al servicio complejo para hacer esto
-        const serviciosFiltrados = result.rows.filter(servicio => !servicio.servicio_complejo);
-
-        return {
-            count: serviciosFiltrados.length,
-            rows: serviciosFiltrados,
-        };
+        return { count, rows };
     } catch (error) {
         console.error("Error en el servicio de filtrar servicio:", error);
         if (!error.errors || !Array.isArray(error.errors)) {

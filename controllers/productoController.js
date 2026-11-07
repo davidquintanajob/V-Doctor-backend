@@ -37,12 +37,8 @@ const createProducto = async (req, res) => {
     }
 
     if (!nombre) errors.push("El nombre es requerido");
-    if (!costo_usd) errors.push("El costo_usd es requerido");
-    if (!costo_cup) errors.push("El costo_cup es requerido");
     if (!categoria) errors.push("La categoria es requerida");
     if (!codigo) errors.push("El codigo es requerido");
-    if (!precio_usd) errors.push("El precio_usd es requerido");
-    if (!precio_cup) errors.push("El precio_cup es requerido");
 
     if (errors.length > 0) {
         return res.status(400).json({ errors });

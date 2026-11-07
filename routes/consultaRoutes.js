@@ -43,6 +43,8 @@ const authenticate = require('../helpers/authenticate');
  *                     type: string
  *                   patologia:
  *                     type: string
+ *                   is_pendiente:
+ *                     type: boolean
  *                   id_paciente:
  *                     type: integer
  *                   id_usuario:
@@ -120,6 +122,9 @@ router.get('/consulta/:id', authenticate(), consultaController.getConsultaById);
  *                 type: string
  *               patologia:
  *                 type: string
+ *               is_pendiente:
+ *                 type: boolean
+ *                 default: true
  *               id_paciente:
  *                 type: integer
  *               id_usuario:
@@ -131,6 +136,7 @@ router.get('/consulta/:id', authenticate(), consultaController.getConsultaById);
  *             anamnesis: "Paciente sin síntomas previos"
  *             tratamiento: "Aplicar vacunas"
  *             patologia: "Sin patologías"
+ *             is_pendiente: true
  *             id_paciente: 1
  *             id_usuario: 1
  *     responses:
@@ -178,6 +184,8 @@ router.post('/consulta/Create', authenticate(), consultaController.createConsult
  *                 type: string
  *               patologia:
  *                 type: string
+ *               is_pendiente:
+ *                 type: boolean
  *               id_paciente:
  *                 type: integer
  *               id_usuario:
@@ -275,6 +283,9 @@ router.delete('/consulta/Delete/:id', authenticate(), consultaController.deleteC
  *               descripcion:
  *                 type: string
  *                 description: Búsqueda general en motivo, diagnostico, anamnesis, tratamiento y patologia
+ *               is_pendiente:
+ *                 type: boolean
+ *                 description: Filtrar consultas pendientes (true) o no pendientes (false)
  *     responses:
  *       200:
  *         description: Consultas filtradas con paginación. Cada consulta incluye datos del usuario, paciente y fotos asociadas
@@ -338,6 +349,9 @@ router.post('/consulta/Filter/:limit/:page', authenticate(), consultaController.
  *                 type: string
  *               patologia:
  *                 type: string
+ *               is_pendiente:
+ *                 type: boolean
+ *                 default: true
  *               id_paciente:
  *                 type: integer
  *               id_usuario:
@@ -365,6 +379,7 @@ router.post('/consulta/Filter/:limit/:page', authenticate(), consultaController.
  *                 anamnesis: "Paciente traumatismo hace 2 días"
  *                 tratamiento: "Inmovilización y reposo"
  *                 patologia: "Fractura"
+ *                 is_pendiente: true
  *                 id_paciente: 1
  *                 id_usuario: 1
  *                 fotos:
@@ -417,6 +432,8 @@ router.post('/consulta/CreateWithPhotos', authenticate(), consultaController.cre
  *                 type: string
  *               patologia:
  *                 type: string
+ *               is_pendiente:
+ *                 type: boolean
  *               id_paciente:
  *                 type: integer
  *               id_usuario:
@@ -478,6 +495,8 @@ router.put('/consulta/UpdateWithPhotos/:id', authenticate(), consultaController.
  *                 type: string
  *               patologia:
  *                 type: string
+ *               is_pendiente:
+ *                 type: boolean
  *               id_paciente:
  *                 type: integer
  *               id_usuario:
@@ -506,6 +525,7 @@ router.put('/consulta/UpdateWithPhotos/:id', authenticate(), consultaController.
  *                 anamnesis: "Síntomas leves"
  *                 tratamiento: "Desparasitación"
  *                 patologia: "Sin patologías"
+ *                 is_pendiente: true
  *                 id_paciente: 1
  *                 id_usuario: 1
  *                 fotos:

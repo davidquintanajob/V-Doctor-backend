@@ -254,8 +254,18 @@ const filterMedicamentosPaginated = async (filterCriteria, limit, offset) => {
                     ]
                 }
             ],
-            order: [['tipo_medicamento', 'ASC']]
+            order: [
+                ['tipo_medicamento', 'ASC']
+            ]
         });
+
+        // Ordenar los resultados en memoria por nombre del producto
+        result.rows = result.rows.sort((a, b) => {
+            const nombreA = a.producto?.nombre || '';
+            const nombreB = b.producto?.nombre || '';
+            return nombreA.localeCompare(nombreB);
+        });
+
         return result;
     } catch (error) {
         console.error("Error en el servicio de filtrar medicamentos:", error);

@@ -96,6 +96,11 @@ const Paciente = sequelize.define("paciente", {
       max: 100,
     },
   },
+  nota: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: "",
+  },
 }, {
   timestamps: true,
 });
